@@ -20,7 +20,7 @@ BOOL RCJBRootAvailable(void) {
 NSString *RCJBRootImagePath(void) {
     RCJBRootFunction fn = RCResolveJBRoot();
     if (!fn) return @"";
-    Dl_info info = {0};
+    Dl_info info{};
     if (dladdr((const void *)fn, &info) && info.dli_fname) {
         NSString *path = [NSString stringWithUTF8String:info.dli_fname];
         return path ?: @"";

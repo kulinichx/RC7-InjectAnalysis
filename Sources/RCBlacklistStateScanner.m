@@ -72,6 +72,7 @@
     BOOL blacklistDisabled = [defaults[@"blacklistDisabled"] boolValue];
     NSMutableArray<RCBlacklistResidueRecord *> *out = [NSMutableArray array];
     [appconfig enumerateKeysAndObjectsUsingBlock:^(id key, id value, BOOL *stop) {
+        (void)stop;
         if (![key isKindOfClass:NSString.class] || ![(NSString *)key length]) return;
         // Only a stored YES is treated as an actual blacklist entry. A NO value may
         // simply be an implementation/default artifact and is deliberately ignored.

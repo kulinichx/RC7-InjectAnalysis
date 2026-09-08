@@ -87,6 +87,7 @@
 
     NSMutableDictionary *frozenBasenames = [NSMutableDictionary dictionary];
     [basenameOwners enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSMutableOrderedSet *obj, BOOL *stop) {
+        (void)stop;
         frozenBasenames[key] = obj.array;
     }];
     self.packagesByIdentifier = packages;

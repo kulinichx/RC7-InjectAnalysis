@@ -1,0 +1,7 @@
+.theos/
+dist/
+packages/
+.DS_Store
+__pycache__/
+*.pyc
+RCInjectAnalysis-build.log

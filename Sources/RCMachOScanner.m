@@ -128,7 +128,11 @@ static uint64_t RCSwap64(uint64_t x) { return __builtin_bswap64(x); }
     NSDirectoryEnumerator *enumerator = [fm enumeratorAtURL:[NSURL fileURLWithPath:app.bundlePath]
                                 includingPropertiesForKeys:nil
                                                    options:0
-                                              errorHandler:^BOOL(NSURL *url, NSError *error) { return YES; }];
+                                              errorHandler:^BOOL(NSURL *url, NSError *error) {
+                                                  (void)url;
+                                                  (void)error;
+                                                  return YES;
+                                              }];
     if (!enumerator) {
         result.status = @"无法创建 App bundle 枚举器；不作未发现结论";
         result.stopReason = @"enumerator-unavailable";

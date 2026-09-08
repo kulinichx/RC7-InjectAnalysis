@@ -69,7 +69,10 @@
     return c;
 }
 - (NSArray<RCTweakRecord *> *)unknownOwnerTweaks {
-    NSPredicate *p = [NSPredicate predicateWithBlock:^BOOL(RCTweakRecord *t, NSDictionary *b) { return t.installSource == RCTweakInstallSourceUnknown; }];
+    NSPredicate *p = [NSPredicate predicateWithBlock:^BOOL(RCTweakRecord *t, NSDictionary *b) {
+        (void)b;
+        return t.installSource == RCTweakInstallSourceUnknown;
+    }];
     return [self.snapshot.tweaks filteredArrayUsingPredicate:p];
 }
 - (UITableViewCell *)environmentCellForRow:(NSInteger)row {

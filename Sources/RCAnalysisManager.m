@@ -224,6 +224,7 @@ typedef void (^RCAnalysisCompletion)(RCAnalysisSnapshot *snapshot);
     }];
 
     NSPredicate *issuePredicate = [NSPredicate predicateWithBlock:^BOOL(RCTweakRecord *t, NSDictionary *bindings) {
+        (void)bindings;
         return t.issueSeverity >= RCTweakIssueSeveritySuspicious;
     }];
 

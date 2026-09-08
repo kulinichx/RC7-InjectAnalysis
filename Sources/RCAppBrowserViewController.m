@@ -45,6 +45,7 @@
     } else {
         NSString *needle = q.lowercaseString;
         NSPredicate *p = [NSPredicate predicateWithBlock:^BOOL(RCAppRecord *app, NSDictionary *bindings) {
+            (void)bindings;
             return [app.name.lowercaseString containsString:needle] || [app.bundleIdentifier.lowercaseString containsString:needle];
         }];
         self.filteredApps = [self.allApps filteredArrayUsingPredicate:p];

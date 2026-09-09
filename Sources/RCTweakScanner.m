@@ -3,17 +3,32 @@
 #import "RCPath.h"
 
 @implementation RCTweakScanner
-- (NSArray<NSString *> *)bundleIDsFromPlist:(NSDictionary *)plist {
-    id filter = plist[@"Filter"] ?: plist[@"filter"];
-    if (![filter isKindOfClass:NSDictionary.class]) return @[];
-    id bundles = filter[@"Bundles"] ?: filter[@"bundles"];
-    if ([bundles isKindOfClass:NSString.class]) return @[(NSString *)bundles];
-    if (![bundles isKindOfClass:NSArray.class]) return @[];
+- (NSArray<NSString *> *)stringValuesFromFilter:(NSDictionary *)filter keys:(NSArray<NSString *> *)keys {
+    id value = nil;
+    for (NSString *key in keys) {
+        value = filter[key];
+        if (value) break;
+    }
+    if ([value isKindOfClass:NSString.class]) return [value length] ? @[(NSString *)value] : @[];
+    if (![value isKindOfClass:NSArray.class]) return @[];
     NSMutableOrderedSet<NSString *> *out = [NSMutableOrderedSet orderedSet];
-    for (id obj in (NSArray *)bundles) {
+    for (id obj in (NSArray *)value) {
         if ([obj isKindOfClass:NSString.class] && [obj length]) [out addObject:obj];
     }
     return out.array;
+}
+
+- (NSDictionary *)filterDictionaryFromPlist:(NSDictionary *)plist {
+    id filter = plist[@"Filter"] ?: plist[@"filter"];
+    return [filter isKindOfClass:NSDictionary.class] ? filter : @{};
+}
+
+- (NSArray<NSString *> *)bundleIDsFromPlist:(NSDictionary *)plist {
+    return [self stringValuesFromFilter:[self filterDictionaryFromPlist:plist] keys:@[@"Bundles", @"bundles"]];
+}
+
+- (NSArray<NSString *> *)executablesFromPlist:(NSDictionary *)plist {
+    return [self stringValuesFromFilter:[self filterDictionaryFromPlist:plist] keys:@[@"Executables", @"executables"]];
 }
 
 - (NSArray<RCTweakRecord *> *)scanWithPackageResolver:(RCDpkgResolver *)resolver {
@@ -49,6 +64,10 @@
         r.plistPath = plistPath;
         r.dylibPath = dylibExists ? dylibPath : nil;
         r.bundleIdentifiers = [self bundleIDsFromPlist:plist];
+        r.executableIdentifiers = [self executablesFromPlist:plist];
+        r.installedTargetExecutableIdentifiers = @[];
+        r.systemTargetExecutableIdentifiers = @[];
+        r.unresolvedTargetExecutableIdentifiers = @[];
         r.installedTargetBundleIdentifiers = @[];
         r.uninstalledTargetBundleIdentifiers = @[];
         r.package = package;

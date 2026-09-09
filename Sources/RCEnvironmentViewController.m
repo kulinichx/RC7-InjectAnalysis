@@ -175,6 +175,9 @@
             }
         }
         NSMutableArray<NSString *> *parts = [NSMutableArray array];
+        if (t.systemTargetExecutableIdentifiers.count) [parts addObject:[NSString stringWithFormat:@"Filter.Executables 已确认系统进程目标：\n%@", [t.systemTargetExecutableIdentifiers componentsJoinedByString:@"\n"]]];
+        if (t.unresolvedTargetExecutableIdentifiers.count) [parts addObject:[NSString stringWithFormat:@"Filter.Executables 未解析目标：\n%@\n不据此判断为系统注入或已卸载 App。", [t.unresolvedTargetExecutableIdentifiers componentsJoinedByString:@"\n"]]];
+        if (t.installedTargetExecutableIdentifiers.count) [parts addObject:[NSString stringWithFormat:@"Filter.Executables 同时匹配已注册 App：\n%@", [t.installedTargetExecutableIdentifiers componentsJoinedByString:@"\n"]]];
         if (systemTargets.count) [parts addObject:[NSString stringWithFormat:@"系统级目标：\n%@", [systemTargets componentsJoinedByString:@"\n"]]];
         if (unresolvedTargets.count) [parts addObject:[NSString stringWithFormat:@"未匹配到当前 LaunchServices App：\n%@\n不据此判断为‘已卸载 App’或垃圾项。", [unresolvedTargets componentsJoinedByString:@"\n"]]];
         if (t.installedTargetBundleIdentifiers.count) [parts addObject:[NSString stringWithFormat:@"同时匹配已注册 App：%lu 个", (unsigned long)t.installedTargetBundleIdentifiers.count]];

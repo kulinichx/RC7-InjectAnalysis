@@ -2,7 +2,8 @@
 """Design-level regression checks for conservative the current RCInjectAnalysis rules.
 
 This mirrors intended classification/unknown-state semantics. It is not a
-substitute for compiling/running the Objective-C scanner on an RC7 device.
+substitute for compiling/running the Objective-C scanner in the RootHide
+blacklist Manager on an RC7 or RC8 device.
 """
 
 def blacklist_residues(appconfig, installed_ids):
@@ -62,6 +63,33 @@ def mixed_source(match_count, blacklist_supported, blacklist_known, blacklisted,
     return root_hide_config_permits(match_count, blacklist_supported, blacklist_known, blacklisted) and active_embedded > 0
 
 
+def app_injection_visible(dpkg_owned_tweaks, trollfools_records):
+    return dpkg_owned_tweaks > 0 or trollfools_records > 0
+
+
+def trollfools_plugin_count(load_paths):
+    return len({path for path in load_paths if path})
+
+
+def split_executable_targets(filter_executables, installed_app_executables, known_system_executables):
+    installed, system, unresolved = [], [], []
+    for name in filter_executables:
+        if name in installed_app_executables:
+            installed.append(name)
+        elif name in known_system_executables:
+            system.append(name)
+        else:
+            unresolved.append(name)
+    return installed, system, unresolved
+
+
+def system_injection_target(system_executables, unregistered_bundle_ids):
+    if any(bool(name) for name in system_executables):
+        return True
+    known_system_bundles = {"com.apple.springboard", "com.apple.backboardd"}
+    return any(isinstance(bid, str) and bid.lower() in known_system_bundles for bid in unregistered_bundle_ids)
+
+
 def main():
     installed = {"com.xingin.xhs", "com.tencent.xin"}
     appconfig = {
@@ -103,12 +131,33 @@ def main():
     assert mixed_source(1, False, False, False, 1) is False
     assert mixed_source(1, True, True, False, 0) is False
 
+    assert app_injection_visible(1, 0) is True
+    assert app_injection_visible(0, 7) is True
+    assert app_injection_visible(0, 0) is False
+    assert trollfools_plugin_count(["/a/A.dylib", "/a/A.dylib", "/b/B.dylib"]) == 2
+    assert trollfools_plugin_count([]) == 0
+    app_execs, system_execs, unresolved_execs = split_executable_targets(
+        ["WeChat", "SpringBoard", "OldGame"], {"WeChat", "XHS"}, {"SpringBoard", "backboardd"})
+    assert app_execs == ["WeChat"]
+    assert system_execs == ["SpringBoard"]
+    assert unresolved_execs == ["OldGame"]
+    assert system_injection_target(system_execs, []) is True
+    assert unresolved_execs == ["OldGame"] and system_injection_target([], []) is False
+    assert system_injection_target([], ["com.apple.springboard"]) is True
+    assert system_injection_target([], ["com.apple.Pages"]) is False
+    assert system_injection_target([], ["com.example.missing"]) is False
+
     print("PASS: blacklist residue rule only flags explicit YES + absent Bundle ID")
     print("PASS: uninstalled Filter targets remain a separate informational set")
     print("PASS: 50k entry budget is exact and time budgets distinguish per-App timeout from global skip")
     print("PASS: RootHide configuration-permits requires supported + known + not-blacklisted state")
     print("PASS: per-App embedded evidence distinguishes unavailable / not-scanned / partial / complete-zero / evidence")
     print("PASS: mixed-source classification requires both conservative RootHide permission and active embedded diff")
+    print("PASS: App injection home only shows DPKG-owned or TrollFools-injected Apps")
+    print("PASS: TrollFools plugin count uses unique Load Path without calling raw evidence a plugin")
+    print("PASS: Filter.Executables are split into registered-App / confirmed-system / unresolved targets")
+    print("PASS: unresolved executable targets do not become system injection without system-process evidence")
+    print("PASS: system Bundle classification is explicit and does not treat every com.apple.* identifier as a system process")
 
 if __name__ == "__main__":
     main()

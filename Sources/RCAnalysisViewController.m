@@ -1,6 +1,5 @@
 #import "RCAnalysisViewController.h"
 #import "RCAnalysisManager.h"
-#import "RCAppBrowserViewController.h"
 #import "RCAppDetailViewController.h"
 #import "RCModels.h"
 #import "RCDiagnostics.h"
@@ -23,6 +22,7 @@
     [self.refreshControl addTarget:self action:@selector(forceRefresh) forControlEvents:UIControlEventValueChanged];
     [self loadSnapshot];
 }
+
 - (void)shareReport {
     if (!self.snapshot) return;
     NSString *report = [RCDiagnostics fullReadOnlyReportForSnapshot:self.snapshot];
@@ -30,6 +30,7 @@
     vc.popoverPresentationController.barButtonItem = self.navigationItem.rightBarButtonItems.lastObject;
     [self presentViewController:vc animated:YES completion:nil];
 }
+
 - (void)loadSnapshot {
     if (self.scanning) return;
     self.scanning = YES;
@@ -41,6 +42,7 @@
         [weakSelf.tableView reloadData];
     }];
 }
+
 - (void)forceRefresh {
     if (self.scanning) return;
     self.scanning = YES;
@@ -53,50 +55,89 @@
         [weakSelf.tableView reloadData];
     }];
 }
-- (NSUInteger)activeEmbeddedCountForApp:(RCAppRecord *)app {
-    NSUInteger count = 0;
-    for (RCEmbeddedInjectionRecord *r in app.embeddedInjections) if (r.activeDifferenceConfirmed) count++;
-    return count;
-}
-- (BOOL)rootHideInjectionPermittedForApp:(RCAppRecord *)app {
-    // Configuration inference only. This is not proof that a matching dylib was
-    // loaded into a live App process.
-    return app.matchedTweaks.count > 0 && app.blacklistStateKnown && app.blacklistSupported && !app.blacklisted;
-}
-- (NSArray<RCAppRecord *> *)mixedApps {
-    NSMutableArray *a = [NSMutableArray array];
-    for (RCAppRecord *app in self.snapshot.apps) {
-        if ([self rootHideInjectionPermittedForApp:app] && [self activeEmbeddedCountForApp:app] > 0) [a addObject:app];
+
+- (NSArray<RCTweakRecord *> *)dpkgTweaksForApp:(RCAppRecord *)app {
+    NSMutableArray<RCTweakRecord *> *out = [NSMutableArray array];
+    for (RCTweakRecord *tweak in app.matchedTweaks) {
+        if (tweak.installSource == RCTweakInstallSourceDPKG && tweak.package) [out addObject:tweak];
     }
-    return a;
+    return out;
 }
-- (NSArray<RCAppRecord *> *)embeddedApps {
-    NSMutableArray *apps = [NSMutableArray array];
+
+- (NSUInteger)trollFoolsPluginCountForApp:(RCAppRecord *)app {
+    NSMutableSet<NSString *> *loadPaths = [NSMutableSet set];
+    for (RCEmbeddedInjectionRecord *record in app.embeddedInjections) {
+        if (record.loadPath.length) [loadPaths addObject:record.loadPath];
+    }
+    return loadPaths.count;
+}
+
+- (NSString *)trollFoolsSummaryForApp:(RCAppRecord *)app {
+    NSUInteger pluginCount = [self trollFoolsPluginCountForApp:app];
+    return pluginCount
+        ? [NSString stringWithFormat:@"TrollFools · %lu 个插件", (unsigned long)pluginCount]
+        : @"TrollFools · 已发现注入证据";
+}
+
+- (NSArray<RCAppRecord *> *)injectedApps {
+    NSMutableArray<RCAppRecord *> *apps = [NSMutableArray array];
     for (RCAppRecord *app in self.snapshot.apps) {
-        if (app.embeddedInjections.count) [apps addObject:app];
+        BOOL hasDPKG = [self dpkgTweaksForApp:app].count > 0;
+        BOOL hasTrollFools = app.embeddedInjections.count > 0;
+        if (hasDPKG || hasTrollFools) [apps addObject:app];
     }
     [apps sortUsingComparator:^NSComparisonResult(RCAppRecord *a, RCAppRecord *b) {
         return [a.name localizedCaseInsensitiveCompare:b.name];
     }];
     return apps;
 }
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return self.snapshot ? 5 : 1; }
+
+- (NSString *)systemDescriptionForBundleIdentifier:(NSString *)bundleIdentifier {
+    NSString *lower = bundleIdentifier.lowercaseString;
+    if ([lower isEqualToString:@"com.apple.springboard"]) return @"SpringBoard";
+    if ([lower isEqualToString:@"com.apple.backboardd"]) return @"backboardd";
+    return nil;
+}
+
+- (NSArray<NSString *> *)systemTargetDescriptionsForTweak:(RCTweakRecord *)tweak {
+    NSMutableOrderedSet<NSString *> *targets = [NSMutableOrderedSet orderedSet];
+    for (NSString *executable in tweak.systemTargetExecutableIdentifiers) {
+        if (executable.length) [targets addObject:[NSString stringWithFormat:@"系统进程：%@", executable]];
+    }
+    for (NSString *bundleIdentifier in tweak.uninstalledTargetBundleIdentifiers) {
+        NSString *system = [self systemDescriptionForBundleIdentifier:bundleIdentifier];
+        if (system.length) [targets addObject:[NSString stringWithFormat:@"系统目标：%@", system]];
+    }
+    return targets.array;
+}
+
+- (NSArray<RCTweakRecord *> *)systemInjectionTweaks {
+    NSMutableArray<RCTweakRecord *> *out = [NSMutableArray array];
+    for (RCTweakRecord *tweak in self.snapshot.tweaks) {
+        if ([self systemTargetDescriptionsForTweak:tweak].count) [out addObject:tweak];
+    }
+    [out sortUsingComparator:^NSComparisonResult(RCTweakRecord *a, RCTweakRecord *b) {
+        return [a.displayName localizedCaseInsensitiveCompare:b.displayName];
+    }];
+    return out;
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return self.snapshot ? 3 : 1; }
+
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (!self.snapshot) return 1;
     if (section == 0) return 1;
-    if (section == 1) return 1;
-    if (section == 2) return MAX((NSUInteger)1, self.snapshot.multiMatchApps.count);
-    if (section == 3) return MAX((NSUInteger)1, self.embeddedApps.count);
-    return MAX((NSUInteger)1, self.mixedApps.count);
+    if (section == 1) return MAX((NSUInteger)1, self.systemInjectionTweaks.count);
+    return MAX((NSUInteger)1, self.injectedApps.count);
 }
+
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     if (!self.snapshot) return [NSString stringWithFormat:@"Analysis %@", RCAnalysisVersion()];
     if (section == 0) return @"扫描摘要";
-    if (section == 1) return @"单 App 深度分析";
-    if (section == 2) return @"多插件 Filter 匹配";
-    if (section == 3) return @"其它注入（按 App）";
-    return @"RootHide 允许 + TrollFools 活动注入";
+    if (section == 1) return @"系统注入";
+    return @"App 注入";
 }
+
 - (UITableViewCell *)emptyCell:(NSString *)text detail:(NSString *)detail {
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
     cell.textLabel.text = text;
@@ -105,8 +146,10 @@
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     return cell;
 }
+
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     if (!self.snapshot) return [self emptyCell:@"正在只读扫描…" detail:@"不会修改 blacklist、不会 unregister、不会删除文件"];
+
     if (indexPath.section == 0) {
         RCScanMetrics *m = self.snapshot.metrics;
         BOOL incomplete = m.embeddedAppsTruncated || m.embeddedAppsSkippedByGlobalBudget;
@@ -120,72 +163,52 @@
                             scanTime];
         return [self emptyCell:status detail:detail];
     }
+
     if (indexPath.section == 1) {
-        if (!self.snapshot.launchServicesAvailable) return [self emptyCell:@"App 深度分析不可用" detail:@"LaunchServices 未通过 preflight；无法建立可搜索 App 列表"];
+        if (!self.snapshot.tweakScanAvailable) return [self emptyCell:@"系统注入扫描不可用" detail:@"TweakInject 数据源未通过 preflight；不把未执行解释为未发现。"];
+        NSArray<RCTweakRecord *> *systemTweaks = self.systemInjectionTweaks;
+        if (!systemTweaks.count) return [self emptyCell:@"未发现系统注入插件" detail:@"已检查系统 launchd 进程对应的 Filter.Executables，以及明确的系统 Bundle 目标；其它未解析目标保留在环境检查/报告中。"];
+        RCTweakRecord *tweak = systemTweaks[indexPath.row];
         UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
-        cell.textLabel.text = @"浏览全部已注册 App";
-        cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu 个 App · 可按名称 / Bundle ID 搜索并查看完整证据链", (unsigned long)self.snapshot.apps.count];
-        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        cell.textLabel.text = tweak.displayName;
+        NSString *source = tweak.installSource == RCTweakInstallSourceDPKG ? @"DEB（包管理器）" : @"RootHide 插件 · 来源未确认";
+        NSString *targets = [[self systemTargetDescriptionsForTweak:tweak] componentsJoinedByString:@" · "];
+        cell.detailTextLabel.text = targets.length ? [NSString stringWithFormat:@"%@ · %@", source, targets] : source;
+        cell.detailTextLabel.numberOfLines = 0;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
         return cell;
     }
-    if (indexPath.section == 2 && !self.snapshot.tweakScanAvailable) return [self emptyCell:@"RootHide tweak 扫描不可用" detail:@"TweakInject 数据源未通过 preflight；这里不显示‘未发现’，避免把未执行误解为空结果"];
-    if (indexPath.section == 2 && !self.snapshot.launchServicesAvailable) return [self emptyCell:@"App 扫描不可用" detail:@"LaunchServices 未通过 preflight，无法建立 App ↔ Tweak 匹配关系"];
-    if (indexPath.section == 2 && !self.snapshot.multiMatchApps.count) return [self emptyCell:@"未发现多插件匹配" detail:@"扫描已执行；当前没有 App 同时匹配 2 个及以上 RootHide tweak Bundles filter"];
-    if (indexPath.section == 3 && !self.snapshot.embeddedEvidenceAvailable) return [self emptyCell:@"TrollFools 证据扫描不可用" detail:@"LaunchServices/App bundle 数据源不可用；空结果不能解释为未发现"];
-    if (indexPath.section == 3 && !self.embeddedApps.count) {
-        RCScanMetrics *m = self.snapshot.metrics;
-        if (m.embeddedAppsTruncated || m.embeddedAppsSkippedByGlobalBudget) return [self emptyCell:@"TrollFools 证据扫描不完整" detail:@"部分 App 因条目/时间预算未完整扫描；当前空记录不能解释为设备没有 TrollFools 高置信度证据"];
-        return [self emptyCell:@"未发现 TrollFools 高置信度证据" detail:@"扫描已执行且预算内完成；没有备份证据时不会把普通 Framework 误判为巨魔注入"];
-    }
-    if (indexPath.section == 4 && (!self.snapshot.tweakScanAvailable || !self.snapshot.launchServicesAvailable || !self.snapshot.blacklistStateAvailable || !self.snapshot.embeddedEvidenceAvailable)) return [self emptyCell:@"双来源判定条件不完整" detail:@"需要 RootHide Filter、LaunchServices、blacklist 状态与 TrollFools 证据均可用；缺任一数据源时不作‘未发现’结论"];
-    if (indexPath.section == 4 && !self.mixedApps.count) {
-        RCScanMetrics *m = self.snapshot.metrics;
-        if (m.embeddedAppsTruncated || m.embeddedAppsSkippedByGlobalBudget) return [self emptyCell:@"双来源判定不完整" detail:@"RootHide 数据可用，但部分 App 的 TrollFools 证据因扫描预算不完整；不能把当前 0 条解释为未发现双来源"];
-        return [self emptyCell:@"未发现双来源活动证据" detail:@"要求：RootHide Filter 匹配、RootHide blacklist 配置允许、并确认 TrollFools Load Command 差分。仍不等同于运行时证明。"];
+
+    if (!self.snapshot.launchServicesAvailable) return [self emptyCell:@"App 注入分析不可用" detail:@"LaunchServices 未通过 preflight；不能建立 App 注入列表。"];
+    NSArray<RCAppRecord *> *apps = self.injectedApps;
+    if (!apps.count) {
+        BOOL trollFoolsIncomplete = !self.snapshot.embeddedEvidenceAvailable || self.snapshot.metrics.embeddedAppsTruncated || self.snapshot.metrics.embeddedAppsSkippedByGlobalBudget;
+        NSString *detail = trollFoolsIncomplete
+            ? @"没有确认到 DEB（包管理器）App 注入；TrollFools 扫描不完整，因此不作整体 clean 结论。"
+            : @"当前没有检测到 DEB（包管理器）或 TrollFools App 注入。未注入 App 已收纳，不在此列表显示。";
+        return [self emptyCell:@"未发现 App 注入" detail:detail];
     }
 
+    RCAppRecord *app = apps[indexPath.row];
+    NSArray<RCTweakRecord *> *dpkgTweaks = [self dpkgTweaksForApp:app];
+    NSMutableArray<NSString *> *parts = [NSMutableArray array];
+    if (dpkgTweaks.count) [parts addObject:[NSString stringWithFormat:@"DEB（包管理器） · %lu 个插件", (unsigned long)dpkgTweaks.count]];
+    if (app.embeddedInjections.count) [parts addObject:[self trollFoolsSummaryForApp:app]];
+
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
-    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    cell.textLabel.text = app.name.length ? app.name : app.bundleIdentifier;
+    cell.detailTextLabel.text = [parts componentsJoinedByString:@" · "];
     cell.detailTextLabel.numberOfLines = 0;
-    if (indexPath.section == 2) {
-        RCAppRecord *app = self.snapshot.multiMatchApps[indexPath.row];
-        cell.textLabel.text = [NSString stringWithFormat:@"%@     %lu", app.name, (unsigned long)app.matchedTweaks.count];
-        NSString *state = !app.blacklistStateKnown ? @"blacklist 状态未知" : (app.blacklisted ? @"已 blacklist" : @"blacklist 允许");
-        cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@", app.bundleIdentifier, state];
-    } else if (indexPath.section == 3) {
-        RCAppRecord *app = self.embeddedApps[indexPath.row];
-        NSMutableSet<NSString *> *machOPaths = [NSMutableSet set];
-        NSMutableSet<NSString *> *loadPaths = [NSMutableSet set];
-        NSUInteger active = 0;
-        for (RCEmbeddedInjectionRecord *r in app.embeddedInjections) {
-            if (r.targetMachOPath.length) [machOPaths addObject:r.targetMachOPath];
-            if (r.loadPath.length) [loadPaths addObject:r.loadPath];
-            if (r.activeDifferenceConfirmed) active++;
-        }
-        cell.textLabel.text = app.name.length ? app.name : app.bundleIdentifier;
-        cell.detailTextLabel.text = [NSString stringWithFormat:@"证据 %lu 条 · 活动差分 %lu · Mach-O %lu · Load %lu",
-                                         (unsigned long)app.embeddedInjections.count,
-                                         (unsigned long)active,
-                                         (unsigned long)machOPaths.count,
-                                         (unsigned long)loadPaths.count];
-    } else {
-        RCAppRecord *app = self.mixedApps[indexPath.row];
-        cell.textLabel.text = app.name;
-        cell.detailTextLabel.text = [NSString stringWithFormat:@"RootHide Filter %lu 个（blacklist 允许） + TrollFools 活动差分 %lu 个", (unsigned long)app.matchedTweaks.count, (unsigned long)[self activeEmbeddedCountForApp:app]];
-    }
+    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     return cell;
 }
+
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    if (!self.snapshot) return;
-    if (indexPath.section == 1 && self.snapshot.launchServicesAvailable) {
-        [self.navigationController pushViewController:[[RCAppBrowserViewController alloc] initWithSnapshot:self.snapshot] animated:YES];
-        return;
-    }
-    RCAppRecord *app = nil;
-    if (indexPath.section == 2 && self.snapshot.multiMatchApps.count) app = self.snapshot.multiMatchApps[indexPath.row];
-    else if (indexPath.section == 3 && self.embeddedApps.count) app = self.embeddedApps[indexPath.row];
-    else if (indexPath.section == 4 && self.mixedApps.count) app = self.mixedApps[indexPath.row];
-    if (app) [self.navigationController pushViewController:[[RCAppDetailViewController alloc] initWithAppRecord:app snapshot:self.snapshot] animated:YES];
+    if (!self.snapshot || indexPath.section != 2) return;
+    NSArray<RCAppRecord *> *apps = self.injectedApps;
+    if (indexPath.row >= (NSInteger)apps.count) return;
+    RCAppRecord *app = apps[indexPath.row];
+    [self.navigationController pushViewController:[[RCAppDetailViewController alloc] initWithAppRecord:app snapshot:self.snapshot] animated:YES];
 }
 @end

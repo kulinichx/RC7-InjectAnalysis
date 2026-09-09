@@ -17,6 +17,27 @@ static BOOL RCDiagnosticPassed(NSArray<RCDiagnosticItem *> *items, NSString *nam
     return NO;
 }
 
+static NSSet<NSString *> *RCSystemExecutableIdentifiers(void) {
+    NSMutableSet<NSString *> *names = [NSMutableSet setWithArray:@[@"SpringBoard", @"backboardd"]];
+    NSArray<NSString *> *directories = @[@"/System/Library/LaunchDaemons", @"/System/Library/LaunchAgents"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    for (NSString *directory in directories) {
+        NSArray<NSString *> *entries = [fm contentsOfDirectoryAtPath:directory error:nil] ?: @[];
+        for (NSString *entry in entries) {
+            if (![entry.pathExtension.lowercaseString isEqualToString:@"plist"]) continue;
+            NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:[directory stringByAppendingPathComponent:entry]];
+            if (![plist isKindOfClass:NSDictionary.class]) continue;
+            NSString *program = [plist[@"Program"] isKindOfClass:NSString.class] ? plist[@"Program"] : nil;
+            NSArray *arguments = [plist[@"ProgramArguments"] isKindOfClass:NSArray.class] ? plist[@"ProgramArguments"] : nil;
+            NSString *argument0 = [arguments.firstObject isKindOfClass:NSString.class] ? arguments.firstObject : nil;
+            NSString *candidate = program.length ? program : argument0;
+            NSString *executable = candidate.lastPathComponent;
+            if (executable.length) [names addObject:executable];
+        }
+    }
+    return [names copy];
+}
+
 static void RCTimelineAdd(NSMutableArray<RCScanTimelineEvent *> *timeline, NSDate *start, NSString *phase, NSString *detail) {
     RCScanTimelineEvent *event = [RCScanTimelineEvent new];
     event.offset = -[start timeIntervalSinceNow];
@@ -149,31 +170,61 @@ typedef void (^RCAnalysisCompletion)(RCAnalysisSnapshot *snapshot);
     BOOL embeddedEvidenceAvailable = launchServicesAvailable;
 
     NSMutableSet<NSString *> *installedBundleIDs = [NSMutableSet set];
+    NSMutableDictionary<NSString *, NSMutableArray<RCAppRecord *> *> *appsByExecutable = [NSMutableDictionary dictionary];
     for (RCAppRecord *app in apps) {
         if (app.bundleIdentifier.length) [installedBundleIDs addObject:app.bundleIdentifier];
+        if (app.bundleExecutable.length) {
+            NSMutableArray<RCAppRecord *> *targets = appsByExecutable[app.bundleExecutable];
+            if (!targets) appsByExecutable[app.bundleExecutable] = targets = [NSMutableArray array];
+            [targets addObject:app];
+        }
     }
 
+    NSSet<NSString *> *systemExecutableIdentifiers = RCSystemExecutableIdentifiers();
     NSMutableDictionary<NSString *, NSMutableArray<RCTweakRecord *> *> *matches = [NSMutableDictionary dictionary];
     NSMutableArray<RCTweakRecord *> *uninstalledTargetTweaks = [NSMutableArray array];
     for (RCTweakRecord *tweak in tweaks) {
         NSMutableArray<NSString *> *installedTargets = [NSMutableArray array];
         NSMutableArray<NSString *> *uninstalledTargets = [NSMutableArray array];
+        NSMutableArray<NSString *> *installedExecutableTargets = [NSMutableArray array];
+        NSMutableArray<NSString *> *systemExecutableTargets = [NSMutableArray array];
+        NSMutableArray<NSString *> *unresolvedExecutableTargets = [NSMutableArray array];
         for (NSString *bid in tweak.bundleIdentifiers) {
             if (!bid.length) continue;
             if ([installedBundleIDs containsObject:bid]) {
                 [installedTargets addObject:bid];
-                NSMutableArray *arr = matches[bid];
+                NSMutableArray<RCTweakRecord *> *arr = matches[bid];
                 if (!arr) matches[bid] = arr = [NSMutableArray array];
-                [arr addObject:tweak];
+                if (![arr containsObject:tweak]) [arr addObject:tweak];
             } else {
                 [uninstalledTargets addObject:bid];
             }
         }
+        for (NSString *executable in tweak.executableIdentifiers) {
+            if (!executable.length) continue;
+            NSArray<RCAppRecord *> *targetApps = appsByExecutable[executable];
+            if (targetApps.count) {
+                [installedExecutableTargets addObject:executable];
+                for (RCAppRecord *app in targetApps) {
+                    if (!app.bundleIdentifier.length) continue;
+                    NSMutableArray<RCTweakRecord *> *arr = matches[app.bundleIdentifier];
+                    if (!arr) matches[app.bundleIdentifier] = arr = [NSMutableArray array];
+                    if (![arr containsObject:tweak]) [arr addObject:tweak];
+                }
+            } else if ([systemExecutableIdentifiers containsObject:executable]) {
+                [systemExecutableTargets addObject:executable];
+            } else {
+                [unresolvedExecutableTargets addObject:executable];
+            }
+        }
         tweak.installedTargetBundleIdentifiers = installedTargets;
         tweak.uninstalledTargetBundleIdentifiers = uninstalledTargets;
-        if (uninstalledTargets.count) [uninstalledTargetTweaks addObject:tweak];
+        tweak.installedTargetExecutableIdentifiers = installedExecutableTargets;
+        tweak.systemTargetExecutableIdentifiers = systemExecutableTargets;
+        tweak.unresolvedTargetExecutableIdentifiers = unresolvedExecutableTargets;
+        if (uninstalledTargets.count || systemExecutableTargets.count || unresolvedExecutableTargets.count) [uninstalledTargetTweaks addObject:tweak];
     }
-    RCTimelineAdd(timeline, totalStart, @"match-graph", [NSString stringWithFormat:@"installedBundleIDs=%lu tweaksWithUninstalledTargets=%lu", (unsigned long)installedBundleIDs.count, (unsigned long)uninstalledTargetTweaks.count]);
+    RCTimelineAdd(timeline, totalStart, @"match-graph", [NSString stringWithFormat:@"installedBundleIDs=%lu installedExecutables=%lu knownSystemExecutables=%lu tweaksWithNonAppTargets=%lu", (unsigned long)installedBundleIDs.count, (unsigned long)appsByExecutable.count, (unsigned long)systemExecutableIdentifiers.count, (unsigned long)uninstalledTargetTweaks.count]);
 
     phase = [NSDate date];
     NSTimeInterval embeddedPhaseAbsoluteStart = [NSDate timeIntervalSinceReferenceDate];

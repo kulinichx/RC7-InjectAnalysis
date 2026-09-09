@@ -101,6 +101,10 @@ typedef NS_ENUM(NSInteger, RCEmbeddedInjectionSource) {
 @property (nonatomic, copy) NSString *plistPath;
 @property (nonatomic, copy, nullable) NSString *dylibPath;
 @property (nonatomic, copy) NSArray<NSString *> *bundleIdentifiers;
+@property (nonatomic, copy) NSArray<NSString *> *executableIdentifiers;
+@property (nonatomic, copy) NSArray<NSString *> *installedTargetExecutableIdentifiers;
+@property (nonatomic, copy) NSArray<NSString *> *systemTargetExecutableIdentifiers;
+@property (nonatomic, copy) NSArray<NSString *> *unresolvedTargetExecutableIdentifiers;
 @property (nonatomic, copy) NSArray<NSString *> *installedTargetBundleIdentifiers;
 @property (nonatomic, copy) NSArray<NSString *> *uninstalledTargetBundleIdentifiers;
 @property (nonatomic, strong, nullable) RCPackageRecord *package;

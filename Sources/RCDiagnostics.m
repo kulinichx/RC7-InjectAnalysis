@@ -27,6 +27,17 @@ static RCDiagnosticItem *RCCheck(NSString *name, BOOL passed, NSString *detail) 
 
 static NSString *RCBoolText(BOOL value) { return value ? @"YES" : @"NO"; }
 
+static NSString *RCTweakMatchReasonForApp(RCTweakRecord *tweak, RCAppRecord *app) {
+    NSMutableArray<NSString *> *reasons = [NSMutableArray array];
+    if (app.bundleIdentifier.length && [tweak.bundleIdentifiers containsObject:app.bundleIdentifier]) {
+        [reasons addObject:[NSString stringWithFormat:@"Filter.Bundles contains %@", app.bundleIdentifier]];
+    }
+    if (app.bundleExecutable.length && [tweak.executableIdentifiers containsObject:app.bundleExecutable]) {
+        [reasons addObject:[NSString stringWithFormat:@"Filter.Executables contains %@", app.bundleExecutable]];
+    }
+    return reasons.count ? [reasons componentsJoinedByString:@" + "] : @"matched by analysis graph";
+}
+
 @implementation RCDiagnostics
 - (RCEnvironmentProfile *)environmentProfile {
     RCEnvironmentProfile *p = [RCEnvironmentProfile new];
@@ -297,7 +308,10 @@ static NSString *RCBoolText(BOOL value) { return value ? @"YES" : @"NO"; }
         [s appendFormat:@"%@ | %@ | tweaks=%lu | blacklist=%@\n", app.name ?: @"", app.bundleIdentifier ?: @"", (unsigned long)app.matchedTweaks.count, blackState];
         for (RCTweakRecord *t in app.matchedTweaks) {
             [s appendFormat:@"  - %@ | package=%@ | version=%@ | source=%@ | confidence=%@\n", t.displayName ?: @"", t.package.packageIdentifier ?: @"?", t.package.version ?: @"?", RCTweakInstallSourceText(t.installSource), RCConfidenceText(t.sourceConfidence)];
-            [s appendFormat:@"    match=Filter.Bundles contains %@ | plist=%@\n", app.bundleIdentifier ?: @"", t.plistPath ?: @"?"];
+            [s appendFormat:@"    match=%@ | plist=%@ | bundles=%@ | executables=%@\n",
+             RCTweakMatchReasonForApp(t, app), t.plistPath ?: @"?",
+             [t.bundleIdentifiers componentsJoinedByString:@","] ?: @"",
+             [t.executableIdentifiers componentsJoinedByString:@","] ?: @""];
         }
     }
 
@@ -320,10 +334,15 @@ static NSString *RCBoolText(BOOL value) { return value ? @"YES" : @"NO"; }
         for (NSString *issue in t.issues) [s appendFormat:@"  - %@\n", issue];
     }
 
-    [s appendString:@"\n[Uninstalled Filter Targets]\n"];
+    [s appendString:@"\n[System / Unresolved Filter Targets]\n"];
     if (!snapshot.uninstalledTargetTweaks.count) [s appendString:@"(none / or unavailable; see capabilities)\n"];
     for (RCTweakRecord *t in snapshot.uninstalledTargetTweaks) {
-        [s appendFormat:@"%@ | targets=%@\n", t.displayName ?: @"", [t.uninstalledTargetBundleIdentifiers componentsJoinedByString:@","] ?: @""];
+        [s appendFormat:@"%@ | unresolvedBundles=%@ | systemExecutables=%@ | unresolvedExecutables=%@ | appExecutables=%@\n",
+         t.displayName ?: @"",
+         [t.uninstalledTargetBundleIdentifiers componentsJoinedByString:@","] ?: @"",
+         [t.systemTargetExecutableIdentifiers componentsJoinedByString:@","] ?: @"",
+         [t.unresolvedTargetExecutableIdentifiers componentsJoinedByString:@","] ?: @"",
+         [t.installedTargetExecutableIdentifiers componentsJoinedByString:@","] ?: @""];
     }
 
     [s appendString:@"\n[Embedded / TrollFools Evidence]\n"];
@@ -399,8 +418,11 @@ static NSString *RCBoolText(BOOL value) { return value ? @"YES" : @"NO"; }
         for (RCTweakRecord *t in app.matchedTweaks) {
             [s appendFormat:@"- %@ | package=%@ | version=%@ | source=%@ | confidence=%@\n",
              t.displayName ?: @"", t.package.packageIdentifier ?: @"?", t.package.version ?: @"?", RCTweakInstallSourceText(t.installSource), RCConfidenceText(t.sourceConfidence)];
-            [s appendFormat:@"  match=Filter.Bundles contains %@\n  plist=%@\n  bundles=%@\n  sourceEvidence=%@\n",
-             app.bundleIdentifier ?: @"", t.plistPath ?: @"?", [t.bundleIdentifiers componentsJoinedByString:@","] ?: @"", t.installSourceEvidence ?: @""];
+            [s appendFormat:@"  match=%@\n  plist=%@\n  bundles=%@\n  executables=%@\n  sourceEvidence=%@\n",
+             RCTweakMatchReasonForApp(t, app), t.plistPath ?: @"?",
+             [t.bundleIdentifiers componentsJoinedByString:@","] ?: @"",
+             [t.executableIdentifiers componentsJoinedByString:@","] ?: @"",
+             t.installSourceEvidence ?: @""];
         }
     }
 

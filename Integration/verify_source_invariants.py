@@ -36,6 +36,12 @@ dpkg = (src / 'RCDpkgResolver.m').read_text(encoding='utf-8')
 if 'RCDetectionConfidenceHigh' not in dpkg or 'RCDetectionConfidenceMedium' not in dpkg or 'ownersByBasename' not in dpkg:
     errors.append('DPKG resolver does not preserve exact-path vs basename confidence split')
 
+tweak_scanner = (src / 'RCTweakScanner.m').read_text(encoding='utf-8')
+for token in ('Bundles', 'Executables', 'executableIdentifiers', 'installedTargetExecutableIdentifiers',
+              'systemTargetExecutableIdentifiers', 'unresolvedTargetExecutableIdentifiers', 'packageOwningInstalledPath'):
+    if token not in tweak_scanner:
+        errors.append(f'current-release tweak target/source scanner token missing: {token}')
+
 app = (src / 'RCAppScanner.m').read_text(encoding='utf-8')
 for token in ('bundleURL.isFileURL', 'pathExtension.lowercaseString', '_TrollStore', '_TrollStoreLite'):
     if token not in app:
@@ -55,26 +61,38 @@ for token in ('scanInProgress', 'pendingCompletions', 'loadSnapshotWithCompletio
               'RCEmbeddedEntryLimitPerApp', 'RCEmbeddedTimeLimitPerApp', 'RCEmbeddedTotalTimeLimit', 'embeddedAppsTruncated',
               'embeddedAppsTimeLimited', 'embeddedAppsSkippedByGlobalBudget',
               'embeddedIdentities', 'targetMachOPath', 'backupPath', 'loadPath',
+              'appsByExecutable', 'bundleExecutable', 'RCSystemExecutableIdentifiers',
+              '/System/Library/LaunchDaemons', '/System/Library/LaunchAgents',
+              'installedTargetExecutableIdentifiers', 'systemTargetExecutableIdentifiers',
+              'unresolvedTargetExecutableIdentifiers', 'containsObject:tweak',
               'launchServicesAvailable', 'tweakScanAvailable', 'dpkgStatusAvailable', 'dpkgInfoAvailable'):
     if token not in manager:
         errors.append(f'current-release scan-coalescing/budget invariant missing: {token}')
 
 view = (src / 'RCAnalysisViewController.m').read_text(encoding='utf-8')
-for token in ('扫描摘要', '本次分析不完整', 'embeddedAppsTruncated',
-              'RootHide tweak 扫描不可用', '双来源判定条件不完整', '当前进程内结果可复用',
-              '重新扫描', 'loadSnapshot', 'forceRefresh', 'embeddedApps',
-              '活动差分', 'Mach-O', 'Load', 'shareReport', 'fullReadOnlyReportForSnapshot'):
+for token in ('扫描摘要', '系统注入', 'App 注入', '本次分析不完整', 'embeddedAppsTruncated',
+              '当前进程内结果可复用', '重新扫描', 'loadSnapshot', 'forceRefresh',
+              'systemInjectionTweaks', 'Filter.Executables', 'systemTargetExecutableIdentifiers',
+              'injectedApps', 'dpkgTweaksForApp', 'trollFoolsSummaryForApp',
+              'DEB（包管理器）', 'TrollFools', '未注入 App 已收纳', 'shareReport', 'fullReadOnlyReportForSnapshot'):
     if token not in view:
-        errors.append(f'current-release partial-scan UI invariant missing: {token}')
+        errors.append(f'current-release three-panel injection UI invariant missing: {token}')
+for forbidden in ('单 App 深度分析', '多插件 Filter 匹配', '其它注入（按 App）', 'RootHide 允许 + TrollFools 活动注入', '证据 %lu 条'):
+    if forbidden in view:
+        errors.append(f'current-release Analysis home has obsolete panel/debug wording: {forbidden}')
 
 
 env = (src / 'RCEnvironmentViewController.m').read_text(encoding='utf-8')
 for token in ('孤立注册扫描不可用', 'Filter 目标分析不可用', '系统级 / 未解析 Filter 目标',
               '不等于 App 已卸载', 'com.apple.springboard', 'SpringBoard 系统进程',
               'com.apple.backboardd', 'backboardd 系统进程',
+              'Filter.Executables 已确认系统进程目标', 'Filter.Executables 未解析目标',
+              '不据此判断为系统注入或已卸载 App', 'Filter.Executables 同时匹配已注册 App',
               'shareReport', 'fullReadOnlyReportForSnapshot'):
     if token not in env:
         errors.append(f'current-release fail-unknown environment UI invariant missing: {token}')
+if 'hasPrefix:@"com.apple."' in env or 'hasPrefix:@"com.apple."' in view:
+    errors.append('current-release system injection must not classify every com.apple.* identifier as a system process')
 
 
 diag = (src / 'RCDiagnostics.m').read_text(encoding='utf-8')
@@ -85,15 +103,15 @@ if 'writeToFile' in diag or 'writeToURL' in diag:
     errors.append('current-release diagnostic report must remain in-memory/read-only')
 
 detail = (src / 'RCAppDetailViewController.m').read_text(encoding='utf-8')
-for token in ('RootHide Bundles Filter 匹配', '注入 / Blacklist 状态', 'App 注册状态', '其它注入',
-              'TweakInject 数据源未通过 preflight', '不代表已确认冲突',
-              'LaunchServices：已注册', '实际 .app：存在',
+for token in ('DEB（包管理器）', 'TrollFools', 'App 状态', 'dpkgTweaks', 'trollFoolsGroups',
+              'Package：', 'Version：', 'RootHide：允许', '活动注入已确认',
+              '不代表已确认冲突', 'LaunchServices：已注册', '实际 .app：存在',
               '孤立注册：数据源不完整，未判定', '名单残留：数据源不完整，未判定'):
     if token not in detail:
-        errors.append(f'current-release App-centric detail invariant missing: {token}')
-for forbidden in ('安装来源：', 'Layer 0 · 数据源完整性', 'Layer 4 · 运行时进程证明'):
+        errors.append(f'current-release injection-source App detail invariant missing: {token}')
+for forbidden in ('未发现 Bundle ID Filter 匹配', 'RootHide Bundles Filter 匹配', '证据层级', 'Layer 0 · 数据源完整性', 'Layer 4 · 运行时进程证明'):
     if forbidden in detail:
-        errors.append(f'ordinary App detail must hide scanner-centric field: {forbidden}')
+        errors.append(f'ordinary injected-App detail has obsolete scanner-first wording: {forbidden}')
 
 path = (src / 'RCPath.mm').read_text(encoding='utf-8')
 for token in ('RCResolveJBRoot', 'RCJBRootAvailable', 'RCJBRootImagePath', 'dladdr'):
@@ -101,7 +119,10 @@ for token in ('RCResolveJBRoot', 'RCJBRootAvailable', 'RCJBRootImagePath', 'dlad
         errors.append(f'current-release RootHide compatibility token missing: {token}')
 
 models = (src / 'RCModels.h').read_text(encoding='utf-8')
-for token in ('RCEnvironmentProfile', 'RCScanTimelineEvent', 'environmentProfile', 'timeline', 'scanIdentifier', 'embeddedTimeLimitPerApp', 'embeddedTotalTimeLimit'):
+for token in ('RCEnvironmentProfile', 'RCScanTimelineEvent', 'environmentProfile', 'timeline', 'scanIdentifier',
+              'embeddedTimeLimitPerApp', 'embeddedTotalTimeLimit', 'executableIdentifiers',
+              'installedTargetExecutableIdentifiers', 'systemTargetExecutableIdentifiers',
+              'unresolvedTargetExecutableIdentifiers'):
     if token not in models:
         errors.append(f'current-release environment/timeline model token missing: {token}')
 
@@ -121,9 +142,9 @@ for token in ('RootHide 运行环境', '扫描时间线', 'environmentProfile', 
         errors.append(f'current-release compatibility UI token missing: {token}')
 
 detail = (src / 'RCAppDetailViewController.m').read_text(encoding='utf-8')
-for token in ('Package：', 'Version：', '匹配 Filter：'):
+for token in ('DEB（包管理器）', 'Package：', 'Version：', 'RootHide：允许'):
     if token not in detail:
-        errors.append(f'current-release App match-explanation token missing: {token}')
+        errors.append(f'current-release App package-source token missing: {token}')
 
 
 # current release: every registered App must be reachable through a searchable, read-only
@@ -139,21 +160,21 @@ else:
             errors.append(f'current-release App-browser invariant missing: {token}')
 
 view = (src / 'RCAnalysisViewController.m').read_text(encoding='utf-8')
-for token in ('单 App 深度分析', '浏览全部已注册 App', 'RCAppBrowserViewController',
-              'initWithAppRecord:app snapshot:self.snapshot'):
+for token in ('App 注入', 'initWithAppRecord:app snapshot:self.snapshot'):
     if token not in view:
-        errors.append(f'current-release deep-analysis entry invariant missing: {token}')
+        errors.append(f'current-release injected-App detail entry invariant missing: {token}')
 
 detail = (src / 'RCAppDetailViewController.m').read_text(encoding='utf-8')
 for token in ('readOnlyReportForApp:self.record snapshot:self.snapshot',
-              'TweakInject 数据源未通过 preflight', 'Package：', 'Version：',
-              '不代表已确认冲突', 'TrollFools / 巨魔注入'):
+              'DEB（包管理器）', 'Package：', 'Version：',
+              '不代表已确认冲突', 'TrollFools', 'App 状态'):
     if token not in detail:
-        errors.append(f'current-release App deep-analysis invariant missing: {token}')
+        errors.append(f'current-release App injection-detail invariant missing: {token}')
 
 diag = (src / 'RCDiagnostics.m').read_text(encoding='utf-8')
-for token in ('APP READ ONLY REPORT', '[RootHide Filter Matches]',
-              '[Embedded / TrollFools Evidence]', '[Evidence Layers]', 'Layer4-RuntimeProcessProof', '[Interpretation]',
+for token in ('APP READ ONLY REPORT', '[RootHide Filter Matches]', 'Filter.Executables contains',
+              '[System / Unresolved Filter Targets]', '[Embedded / TrollFools Evidence]',
+              '[Evidence Layers]', 'Layer4-RuntimeProcessProof', '[Interpretation]',
               'dual-source injection evidence, not proof of a runtime conflict', 'NOT SCANNED:', 'EmbeddedScanAttempted='):
     if token not in diag:
         errors.append(f'current-release per-App report invariant missing: {token}')

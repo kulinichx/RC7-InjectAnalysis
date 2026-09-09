@@ -51,7 +51,7 @@ def main() -> None:
     if rr.get('BuildID') != bm.get('BuildID') or rr.get('SourceTreeSHA256') != bm.get('SourceTreeSHA256'):
         raise SystemExit('release receipt does not match packaged build/source identity')
     if rr.get('RuntimeDeviceTest') != 'NOT_PERFORMED': raise SystemExit('release receipt must not claim device runtime success')
-    docs=[root/'FIRST-RUN-TEST.md',root/'FIELD-REPORT-TEMPLATE.md',root/'RELEASE-CHECKLIST.md',root/'DEPLOYMENT-README.md']
+    docs=[root/'README.md',root/'GITHUB-BUILD.md',root/'FIRST-RUN-TEST.md',root/'FIELD-REPORT-TEMPLATE.md',root/'RELEASE-CHECKLIST.md',root/'DEPLOYMENT-README.md']
     for p in docs:
         if not p.is_file(): raise SystemExit(f'missing deployment document: {p.name}')
     entries={

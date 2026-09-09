@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail closed unless deployment kit binds install, rollback and exact build source provenance."""
 from __future__ import annotations
-import argparse, hashlib, json, plistlib, subprocess, sys, tempfile, zipfile
+import argparse, hashlib, json, plistlib, shutil, subprocess, sys, tempfile, zipfile
 from pathlib import Path
 from versioning import VERSION
 
@@ -56,8 +56,32 @@ def main():
         install=td/m['InstallDeb']['Path']; rollback=td/m['RollbackDeb']['Path']; receipt=td/m['ReleaseReceipt']['Path']
         provenance=td/m['SourceProvenance']['Path']; snapshot=td/m['SourceSnapshot']['Path']
         subprocess.run([sys.executable,str(root/'Integration/verify_source_snapshot.py'),str(snapshot),str(provenance)],check=True)
-        subprocess.run([sys.executable,str(root/'Integration/verify_release.py'),str(rollback),'--built-deb',str(install)],check=True)
-        subprocess.run([sys.executable,str(root/'Integration/verify_postinstall_contract.py'),str(rollback),'--built-deb',str(install)],check=True)
+
+        # Re-run the release gate from the exact build-source snapshot carried by
+        # the kit, not from the caller's checkout. Release documents are pinned
+        # separately by DEPLOYMENT-MANIFEST.json and are rehydrated into the
+        # replay root because verify_source_invariants.py intentionally checks
+        # those public release surfaces too.
+        replay_dir=td/'release-replay'; replay_dir.mkdir()
+        with zipfile.ZipFile(snapshot) as z:
+            z.extractall(replay_dir)
+        source_root=replay_dir/f'RCInjectAnalysis-{VERSION}'
+        if not source_root.is_dir(): raise SystemExit(f'source snapshot root missing: {source_root.name}')
+        replay_prov=json.loads(provenance.read_text(encoding='utf-8'))
+        for rel,meta in (replay_prov.get('Files') or {}).items():
+            p=source_root/rel
+            if not p.is_file(): raise SystemExit(f'replay source file missing: {rel}')
+            p.chmod(int(meta['Mode'],8))
+        for name in m.get('Documents',{}):
+            src=td/'docs'/name; dst=source_root/name
+            if dst.exists(): raise SystemExit(f'deployment document collides with build-source snapshot: {name}')
+            shutil.copyfile(src,dst)
+        for req in ('README.md','GITHUB-BUILD.md','FIELD-REPORT-TEMPLATE.md','DEPLOYMENT-README.md','RELEASE-CHECKLIST.md','FIRST-RUN-TEST.md'):
+            if not (source_root/req).is_file(): raise SystemExit(f'replay release document missing: {req}')
+
+        subprocess.run([sys.executable,str(source_root/'Integration/verify_source_snapshot.py'),str(snapshot),str(provenance)],check=True)
+        subprocess.run([sys.executable,str(source_root/'Integration/verify_release.py'),str(rollback),'--project-root',str(source_root),'--built-deb',str(install)],check=True)
+        subprocess.run([sys.executable,str(source_root/'Integration/verify_postinstall_contract.py'),str(rollback),'--built-deb',str(install)],check=True)
         prov=json.loads(provenance.read_text(encoding='utf-8')); rr=parse_receipt(receipt)
         with tempfile.TemporaryDirectory(prefix='rcanalysis-kit-pkg-') as pd:
             pd=Path(pd); subprocess.run(['dpkg-deb','-R',str(install),str(pd/'pkg')],check=True,stdout=subprocess.DEVNULL)

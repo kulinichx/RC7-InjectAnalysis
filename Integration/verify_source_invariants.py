@@ -411,6 +411,12 @@ for token in ('DeploymentSchema', 'BuildIdentity', 'SourceProvenance', 'SourceSn
         errors.append(f'current-release deployment provenance token missing: {token}')
 if '--preverified' not in kit_make or '--preverified' not in pipeline_text:
     errors.append('current-release pipeline preverified optimization missing; final verify_deployment_kit must remain mandatory')
+for _doc in ('README.md', 'GITHUB-BUILD.md', 'FIELD-REPORT-TEMPLATE.md', 'DEPLOYMENT-README.md', 'RELEASE-CHECKLIST.md', 'FIRST-RUN-TEST.md'):
+    if _doc not in kit_make:
+        errors.append(f'current-release deployment kit missing replay document input: {_doc}')
+for _token in ('release-replay', 'source_root', "--project-root", 'replay release document missing'):
+    if _token not in kit_verify:
+        errors.append(f'current-release deployment verifier is not snapshot-replay self-contained: {_token}')
 release_text = (integ / 'verify_release.py').read_text(encoding='utf-8')
 if 'verify_original_deb.py' not in release_text:
     errors.append('current-release release gate must pin the exact original RootHide deb')

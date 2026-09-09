@@ -347,6 +347,10 @@ pipeline = (integ / 'release_pipeline.sh').read_text(encoding='utf-8') if (integ
 for token in ('check_toolchain.py', 'verify_version_consistency.py', 'make_source_snapshot.py', 'verify_source_snapshot.py', 'find_built_dylib.py', 'build_roothide_deb.sh', 'verify_release.py', 'make_release_receipt.py'):
     if token not in pipeline:
         errors.append(f'release pipeline missing stage: {token}')
+if 'OUT="$OUTDIR/RootHide-blacklist-Manager-V5.deb"' not in pipeline:
+    errors.append('release pipeline public DEB filename must be RootHide-blacklist-Manager-V5.deb')
+if 'com.roothide.manager_1.3.9+bindtrust1+analysis$VERSION.deb' in pipeline:
+    errors.append('release pipeline still exposes the old long DEB filename')
 finder = (integ / 'find_built_dylib.py').read_text(encoding='utf-8') if (integ / 'find_built_dylib.py').exists() else ''
 for token in ('multiple different valid dylib builds found', 'arm64', 'arm64e', 'RC_ANALYSIS_DYLIB'):
     if token not in finder and token != 'RC_ANALYSIS_DYLIB':

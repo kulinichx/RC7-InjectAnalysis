@@ -1,6 +1,6 @@
-# RCInjectAnalysis 1.0.14 — release checklist
+# RCInjectAnalysis 1.0.17 — release checklist
 
-Target: exact RC7 `com.roothide.manager` `1.3.9+bindtrust1` baseline. Full deb SHA-256 must be `5392005d50c2a3e6189545e408aa4723bad401995ec508efcb48010c53d57f28`.
+Target: exact RootHide `com.roothide.manager` `1.3.9+bindtrust1` baseline. Full deb SHA-256 must be `5392005d50c2a3e6189545e408aa4723bad401995ec508efcb48010c53d57f28`.
 
 ## Preferred release path
 
@@ -16,11 +16,11 @@ Required end state:
 
 ```text
 RELEASE PIPELINE PASS
-<dist>/com.roothide.manager_1.3.9+bindtrust1+analysis1.0.14.deb
-<dist>/RCInjectAnalysis-1.0.14-RELEASE-RECEIPT.txt
-<dist>/RCInjectAnalysis-1.0.14-SOURCE-PROVENANCE.json
-<dist>/RCInjectAnalysis-1.0.14-BUILD-SOURCE.zip
-<dist>/RCInjectAnalysis-1.0.14-DEPLOYMENT-KIT.zip
+<dist>/com.roothide.manager_1.3.9+bindtrust1+analysis1.0.17.deb
+<dist>/RCInjectAnalysis-1.0.17-RELEASE-RECEIPT.txt
+<dist>/RCInjectAnalysis-1.0.17-SOURCE-PROVENANCE.json
+<dist>/RCInjectAnalysis-1.0.17-BUILD-SOURCE.zip
+<dist>/RCInjectAnalysis-1.0.17-DEPLOYMENT-KIT.zip
 ```
 
 The receipt must say `StaticReleaseGate=PASS` and `RuntimeDeviceTest=NOT_PERFORMED` before installation. The deployment kit must pass `Integration/verify_deployment_kit.py`.
@@ -45,10 +45,10 @@ The exact final deb must pass:
 
 ```sh
 python3 Integration/verify_release.py '/path/to/original.deb' \
-  --built-deb '/path/to/+analysis1.0.14.deb'
+  --built-deb '/path/to/+analysis1.0.17.deb'
 ```
 
-The package-delta gate must report preservation of deb ar metadata plus tar type/mode/numeric uid/gid/uname/gname/mtime. The pinned RC7 data/control tar entries use numeric uid `501`, gid `20`, `uname=root`, `gname=wheel`; new Analysis Frameworks entries inherit the `RootHide.app` ownership/name/mtime model.
+The package-delta gate must report preservation of deb ar metadata plus tar type/mode/numeric uid/gid/uname/gname/mtime. The pinned RootHide data/control tar entries use numeric uid `501`, gid `20`, `uname=root`, `gname=wheel`; new Analysis Frameworks entries inherit the `RootHide.app` ownership/name/mtime model.
 
 Allowed delta only:
 
@@ -69,7 +69,7 @@ none
 
 Keep the original `1.3.9+bindtrust1` deb available as rollback. Before interpreting scanner results, require a normal packaged run to report a non-empty loaded-image UUID, expected Frameworks path, host weak load present, Manifest present/version matching/current-slice UUID matching, Menu Hook installed, and `Runtime Self-Check: PASS`.
 
-The first runtime self-check should also report the host executable as uid `0`, gid `0`, executable + setuid; actual mode is reported, matching the unchanged RC7 postinst contract.
+The first runtime self-check should also report the host executable as uid `0`, gid `0`, executable + setuid; actual mode is reported, matching the unchanged RootHide postinst contract.
 
 If Manager fails to launch, native blacklist behavior changes, Analysis menu duplicates, runtime identity warns, or an unavailable source is shown as definitively clean, stop and return the full report/logs. Do not add cleanup/unregister workarounds during first validation.
 

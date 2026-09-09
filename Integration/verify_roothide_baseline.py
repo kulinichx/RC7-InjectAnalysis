@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed unless the input executable matches the RC7 1.3.9 integration assumptions."""
+"""Fail closed unless the input executable matches the RootHide 1.3.9 integration assumptions."""
 import argparse, struct, sys, hashlib
 from pathlib import Path
 from patch_load_command import slices, parse_thin, arch_name, make_dylib_command
@@ -22,7 +22,7 @@ def main():
     blob=Path(a.macho).read_bytes(); buf=bytearray(blob)
     actual_sha256=hashlib.sha256(blob).hexdigest()
     if actual_sha256 != EXPECTED_SHA256:
-        print(f'RC7 executable SHA-256 mismatch: {actual_sha256}', file=sys.stderr)
+        print(f'RootHide executable SHA-256 mismatch: {actual_sha256}', file=sys.stderr)
         print(f'expected exact 1.3.9+bindtrust1 baseline: {EXPECTED_SHA256}', file=sys.stderr)
         sys.exit(2)
     print(f'baseline SHA-256 exact match: {actual_sha256}')
@@ -45,7 +45,7 @@ def main():
         if remaining < lc_size:
             print(f'{name}: insufficient header padding for Analysis load command', file=sys.stderr); ok=False
         if EXPECTED_LOAD in loads:
-            print(f'{name}: Analysis load command already present; expected pristine RC7 baseline', file=sys.stderr); ok=False
+            print(f'{name}: Analysis load command already present; expected pristine RootHide baseline', file=sys.stderr); ok=False
     try:
         ent=find_entitlements(blob)
         for key in ('platform-application','com.apple.private.security.no-sandbox'):
@@ -55,5 +55,5 @@ def main():
     except Exception as e:
         print(f'entitlement verification failed: {e}', file=sys.stderr); ok=False
     if not ok: sys.exit(2)
-    print('RC7 baseline assumptions verified')
+    print('RootHide baseline assumptions verified')
 if __name__=='__main__': main()

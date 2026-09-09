@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Add an LC_LOAD_WEAK_DYLIB/LC_LOAD_DYLIB to thin or FAT Mach-O in-place.
 
-Designed for the RC7 RootHide Manager baseline. The patch only consumes existing
+Designed for the pinned RootHide Manager baseline. The patch only consumes existing
 header padding; it never moves sections or changes FAT slice sizes.
 
 Any Mach-O header edit invalidates the existing code signature. Re-sign the

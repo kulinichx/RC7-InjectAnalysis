@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-command prebuild/final-artifact verifier for the RC7 Analysis integration."""
+"""One-command prebuild/final-artifact verifier for the RootHide Analysis integration."""
 import argparse
 import plistlib
 import shutil
@@ -46,7 +46,7 @@ def main() -> None:
         original_dir = td / "original"
         extract_deb(original, original_dir)
         original_bin = original_dir / "Applications/RootHide.app/RootHide"
-        run([sys.executable, integ / "verify_rc7_baseline.py", original_bin])
+        run([sys.executable, integ / "verify_roothide_baseline.py", original_bin])
         original_ent = td / "original-entitlements.plist"
         run([sys.executable, integ / "extract_entitlements.py", original_bin, original_ent])
         with original_ent.open("rb") as f:

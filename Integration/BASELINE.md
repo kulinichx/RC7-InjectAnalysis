@@ -1,4 +1,4 @@
-# Verified RC7 baseline
+# Verified RootHide baseline
 
 Input package:
 
@@ -58,7 +58,7 @@ Verified load path in both slices:
 @executable_path/Frameworks/RCInjectAnalysis.dylib (weak)
 ```
 
-Original RC7 XML entitlement plist extraction produced 199 keys. The packaging script extracts entitlements again from the input executable instead of blindly trusting the bundled reference copy.
+Original RootHide XML entitlement plist extraction produced 199 keys. The packaging script extracts entitlements again from the input executable instead of blindly trusting the bundled reference copy.
 
 Original package `postinst` remains unchanged:
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the original RC7 postinst is untouched and still defines the expected installation state."""
+"""Verify the original RootHide postinst is untouched and still defines the expected installation state."""
 import argparse, hashlib, shutil, subprocess, tempfile
 from pathlib import Path
 
@@ -45,7 +45,7 @@ def main() -> None:
         td = Path(td)
         original_data = extract_control(orig, td / "original")
         validate_original(original_data)
-        print("original RC7 postinst: PASS")
+        print("original RootHide postinst: PASS")
         print("expected installed RootHide state: uid=0 gid=0, executable, setuid present (actual mode is reported; chmod +s may also set setgid)")
         if a.built_deb:
             built = Path(a.built_deb).resolve()
@@ -53,7 +53,7 @@ def main() -> None:
                 raise SystemExit(f"built deb missing: {built}")
             built_data = extract_control(built, td / "built")
             if built_data != original_data:
-                raise SystemExit("built package postinst differs from original RC7")
+                raise SystemExit("built package postinst differs from original RootHide")
             print("built postinst byte-identical to original: PASS")
 
 if __name__ == "__main__":

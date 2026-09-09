@@ -3,7 +3,7 @@
 
 This mirrors intended classification/unknown-state semantics. It is not a
 substitute for compiling/running the Objective-C scanner in the RootHide
-blacklist Manager on an RC7 or RC8 device.
+blacklist Manager in a supported RootHide environment.
 """
 
 def blacklist_residues(appconfig, installed_ids):
@@ -161,3 +161,12 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Current UX rule: unresolved Filter section is exceptional and only visible when actual unresolved targets exist.
+def unresolved_section_visible(unresolved_exec_count, unresolved_bundle_count):
+    return unresolved_exec_count > 0 or unresolved_bundle_count > 0
+
+assert not unresolved_section_visible(0, 0)
+assert unresolved_section_visible(1, 0)
+assert unresolved_section_visible(0, 1)
+print('PASS: unresolved Filter section stays hidden at zero and appears only for actual unresolved targets')

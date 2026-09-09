@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed on the current Analysis release source invariants that protect the RC7 baseline."""
+"""Fail closed on the current Analysis release source invariants that protect the RootHide baseline."""
 import re
 import sys
 from pathlib import Path
@@ -8,9 +8,40 @@ root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().paren
 src = root / 'Sources'
 errors = []
 
+# Public UI/release surfaces use product names only; internal release codenames must not leak.
+_public_release_labels = ('RC' + '7', 'RC' + '8')
+_public_release_files = [
+    src / 'RCEntry.mm', src / 'RCBlacklistStateScanner.m', src / 'RCDiagnostics.m',
+    src / 'RCAnalysisViewController.m', src / 'RCAppDetailViewController.m', src / 'RCEnvironmentViewController.m',
+    root / 'FIELD-REPORT-TEMPLATE.md', root / 'DEPLOYMENT-README.md',
+    root / 'RELEASE-CHECKLIST.md', root / 'FIRST-RUN-TEST.md',
+    root / 'Integration' / 'README.md', root / 'Integration' / 'BASELINE.md',
+    root / 'Integration' / 'make_deployment_kit.py', root / 'Integration' / 'make_release_receipt.py',
+    root / 'Integration' / 'verify_deployment_kit.py',
+]
+for _path in _public_release_files:
+    if not _path.exists():
+        errors.append(f'public release surface missing: {_path.name}')
+        continue
+    _text = _path.read_text(encoding='utf-8', errors='replace')
+    for _label in _public_release_labels:
+        if _label in _text:
+            errors.append(f'public release surface contains internal codename: {_path.name}')
+
+
+# Build-source filenames use neutral RootHide naming as well.
+for _path in (root / 'Integration').iterdir():
+    _name = _path.name.lower()
+    if ('rc' + '7') in _name or ('rc' + '8') in _name:
+        errors.append(f'build-source filename contains internal codename: {_path.name}')
+for _required in ('build_roothide_deb.sh', 'verify_roothide_baseline.py', 'RootHide-1.3.9+bindtrust1.entitlements.plist'):
+    if not (root / 'Integration' / _required).exists():
+        errors.append(f'neutral RootHide build-source file missing: {_required}')
+
+
 entry = (src / 'RCEntry.mm').read_text(encoding='utf-8')
 if '@"URL"' in entry or '[@"URL"]' in entry:
-    errors.append('RCEntry uses uppercase URL key; RC7 native schema is lowercase url')
+    errors.append('RCEntry uses uppercase URL key; RootHide native schema is lowercase url')
 for token in ('@"type": @"url"', '@"url": @"rcanalysis://injection"', '@"url": @"rcanalysis://environment"'):
     if token not in entry:
         errors.append(f'RCEntry missing required native-menu token: {token}')
@@ -30,7 +61,7 @@ for pattern, label in [
 
 black = (src / 'RCBlacklistStateScanner.m').read_text(encoding='utf-8')
 if 'RootHideConfig.plist' not in black or 'appconfig' not in black or 'blacklistDisabled' not in black:
-    errors.append('read-only blacklist scanner is missing expected RC7 config keys')
+    errors.append('read-only blacklist scanner is missing expected RootHide config keys')
 
 dpkg = (src / 'RCDpkgResolver.m').read_text(encoding='utf-8')
 if 'RCDetectionConfidenceHigh' not in dpkg or 'RCDetectionConfidenceMedium' not in dpkg or 'ownersByBasename' not in dpkg:
@@ -71,7 +102,8 @@ for token in ('scanInProgress', 'pendingCompletions', 'loadSnapshotWithCompletio
 
 view = (src / 'RCAnalysisViewController.m').read_text(encoding='utf-8')
 for token in ('扫描摘要', '系统注入', 'App 注入', '本次分析不完整', 'embeddedAppsTruncated',
-              '当前进程内结果可复用', '重新扫描', 'loadSnapshot', 'forceRefresh',
+              '当前进程内结果可复用', '重新扫描', '扫描中…', '正在重新扫描…', '当前显示上一次结果',
+              'rescanButton', 'loadSnapshot', 'forceRefresh',
               'systemInjectionTweaks', 'Filter.Executables', 'systemTargetExecutableIdentifiers',
               'injectedApps', 'dpkgTweaksForApp', 'trollFoolsSummaryForApp',
               'DEB（包管理器）', 'TrollFools', '未注入 App 已收纳', 'shareReport', 'fullReadOnlyReportForSnapshot'):
@@ -83,14 +115,17 @@ for forbidden in ('单 App 深度分析', '多插件 Filter 匹配', '其它注�
 
 
 env = (src / 'RCEnvironmentViewController.m').read_text(encoding='utf-8')
-for token in ('孤立注册扫描不可用', 'Filter 目标分析不可用', '系统级 / 未解析 Filter 目标',
-              '不等于 App 已卸载', 'com.apple.springboard', 'SpringBoard 系统进程',
+for token in ('孤立注册扫描不可用', '未解析 Filter 目标', 'unresolvedFilterTweaks',
+              'com.apple.springboard', 'SpringBoard 系统进程',
               'com.apple.backboardd', 'backboardd 系统进程',
-              'Filter.Executables 已确认系统进程目标', 'Filter.Executables 未解析目标',
-              '不据此判断为系统注入或已卸载 App', 'Filter.Executables 同时匹配已注册 App',
+              'Filter.Executables 未解析目标', 'Filter.Bundles 未解析目标',
+              '未解析不代表系统注入，也不代表 App 已卸载', '此项仅在确有未解析目标时显示',
+              '扫描中…', '当前显示上一次结果', 'rescanButton',
               'shareReport', 'fullReadOnlyReportForSnapshot'):
     if token not in env:
         errors.append(f'current-release fail-unknown environment UI invariant missing: {token}')
+if '系统级 / 未解析 Filter 目标' in env:
+    errors.append('current-release Environment UI must not mix confirmed system targets with unresolved Filter targets')
 if 'hasPrefix:@"com.apple."' in env or 'hasPrefix:@"com.apple."' in view:
     errors.append('current-release system injection must not classify every com.apple.* identifier as a system process')
 
@@ -239,7 +274,7 @@ integ = root / 'Integration'
 for required in ('make_build_manifest.py', 'verify_build_manifest.py', 'verify_release.py', 'verify_package_delta.py'):
     if not (integ / required).exists():
         errors.append(f'current-release integration identity verifier missing: {required}')
-builder = (integ / 'build_rc7_deb.sh').read_text(encoding='utf-8')
+builder = (integ / 'build_roothide_deb.sh').read_text(encoding='utf-8')
 for token in ('RCInjectAnalysis.buildinfo.plist', 'make_build_manifest.py', 'verify_build_manifest.py', 'SUFFIX="+analysis$VERSION"'):
     if token not in builder:
         errors.append(f'current-release builder identity token missing: {token}')
@@ -290,7 +325,7 @@ else:
 release_text = (root / 'Integration' / 'verify_release.py').read_text(encoding='utf-8')
 if 'verify_package_delta.py' not in release_text:
     errors.append('current-release release gate must run package-delta verifier')
-builder_text = (root / 'Integration' / 'build_rc7_deb.sh').read_text(encoding='utf-8')
+builder_text = (root / 'Integration' / 'build_roothide_deb.sh').read_text(encoding='utf-8')
 if 'VERIFY_DELTA' not in builder_text or 'verify_package_delta.py' not in builder_text:
     errors.append('current-release builder must run package-delta verifier')
 
@@ -309,7 +344,7 @@ else:
 if 'Integration/generate_version_header.py' not in mk or 'before-all::' not in mk:
     errors.append('Makefile does not regenerate the Objective-C version header before build')
 pipeline = (integ / 'release_pipeline.sh').read_text(encoding='utf-8') if (integ / 'release_pipeline.sh').exists() else ''
-for token in ('check_toolchain.py', 'verify_version_consistency.py', 'make_source_snapshot.py', 'verify_source_snapshot.py', 'find_built_dylib.py', 'build_rc7_deb.sh', 'verify_release.py', 'make_release_receipt.py'):
+for token in ('check_toolchain.py', 'verify_version_consistency.py', 'make_source_snapshot.py', 'verify_source_snapshot.py', 'find_built_dylib.py', 'build_roothide_deb.sh', 'verify_release.py', 'make_release_receipt.py'):
     if token not in pipeline:
         errors.append(f'release pipeline missing stage: {token}')
 finder = (integ / 'find_built_dylib.py').read_text(encoding='utf-8') if (integ / 'find_built_dylib.py').exists() else ''
@@ -326,10 +361,10 @@ for token in ('BuildID=', 'SourceTreeSHA256=', 'SourceFileCount='):
     if token not in receipt:
         errors.append(f'release receipt missing source/build provenance token: {token}')
 
-baseline = (root / 'Integration' / 'verify_rc7_baseline.py').read_text(encoding='utf-8')
+baseline = (root / 'Integration' / 'verify_roothide_baseline.py').read_text(encoding='utf-8')
 for token in ('EXPECTED_SHA256', 'c12b596acd1856677b8fb9753fcebdd88c7601318f10b6b7a8926e2568de687e', 'SHA-256 mismatch'):
     if token not in baseline:
-        errors.append(f'exact RC7 baseline gate missing: {token}')
+        errors.append(f'exact RootHide baseline gate missing: {token}')
 
 
 # current-release first-device installation contract + deployment-kit invariants.
@@ -378,10 +413,39 @@ if '--preverified' not in kit_make or '--preverified' not in pipeline_text:
     errors.append('current-release pipeline preverified optimization missing; final verify_deployment_kit must remain mandatory')
 release_text = (integ / 'verify_release.py').read_text(encoding='utf-8')
 if 'verify_original_deb.py' not in release_text:
-    errors.append('current-release release gate must pin the exact original RC7 deb')
+    errors.append('current-release release gate must pin the exact original RootHide deb')
 if 'verify_postinstall_contract.py' not in release_text:
     errors.append('current-release final release gate must verify unchanged postinstall contract')
 
+
+# Current release documentation must match the three-panel UI and current rescan semantics.
+_current_docs = [root / 'README.md', root / 'GITHUB-BUILD.md', root / 'FIELD-REPORT-TEMPLATE.md', root / 'FIRST-RUN-TEST.md']
+for _path in _current_docs:
+    if not _path.exists():
+        errors.append(f'current-release documentation missing: {_path.name}')
+        continue
+    _text = _path.read_text(encoding='utf-8', errors='replace')
+    for _stale_version in ('1.0.14', '1.0.15', '1.0.16'):
+        if _stale_version in _text:
+            errors.append(f'current-release documentation has stale Analysis version: {_path.name}: {_stale_version}')
+_first_run = (root / 'FIRST-RUN-TEST.md').read_text(encoding='utf-8')
+for _token in ('扫描摘要', '系统注入', 'App 注入', 'DEB（包管理器）', 'TrollFools', '未解析 Filter 目标', '扫描中…', '当前显示上一次结果'):
+    if _token not in _first_run:
+        errors.append(f'current-release first-run documentation token missing: {_token}')
+for _obsolete in ('单 App 深度分析', 'RootHide 允许 + TrollFools 活动注入', '多插件 Filter 匹配'):
+    if _obsolete in _first_run:
+        errors.append(f'current-release first-run documentation has obsolete UI token: {_obsolete}')
+
+# README must describe the current user-facing Analysis model.
+_readme = (root / 'README.md').read_text(encoding='utf-8')
+for _token in ('扫描摘要', '系统注入', 'App 注入', 'DEB（包管理器）', 'TrollFools'):
+    if _token not in _readme:
+        errors.append(f'current-release README model token missing: {_token}')
+for _obsolete in ('does not broaden the detection surface',
+                  'searchable single-App deep analysis',
+                  'evidence Layer 0–4 wording'):
+    if _obsolete in _readme:
+        errors.append(f'current-release README has obsolete Analysis description: {_obsolete}')
 
 # Archive-level package metadata must remain baseline-exact; build-host uid/gid must not leak into the deb.
 delta_text = (integ / 'verify_package_delta.py').read_text(encoding='utf-8')
@@ -392,7 +456,7 @@ repack_text = (integ / 'repack_deb_preserving_metadata.py').read_text(encoding='
 for token in ('numeric uid=501/gid=20', 'uname/gname are root/wheel', 'rebuild_tar', 'FORMAT_ALONE', 'BASELINE_PARENT'):
     if token not in repack_text:
         errors.append(f'current-release baseline-aware repacker token missing: {token}')
-builder_text = (integ / 'build_rc7_deb.sh').read_text(encoding='utf-8')
+builder_text = (integ / 'build_roothide_deb.sh').read_text(encoding='utf-8')
 for token in ('repack_deb_preserving_metadata.py', 'numeric uid=501/gid=20', 'uname=root/gname=wheel', 'chmod 0755 "$APP/Frameworks"'):
     if token not in builder_text:
         errors.append(f'current-release metadata-preserving builder token missing: {token}')

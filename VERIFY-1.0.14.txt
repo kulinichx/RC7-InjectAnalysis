@@ -4,11 +4,11 @@ RCInjectAnalysis 1.0.14 FINAL STATIC / PROVENANCE VERIFICATION
 Scope
 -----
 Static/pre-install verification only. No real Theos+iPhoneOS SDK universal link,
-real ldid release signing, or RC7 device launch was performed in this host.
+real ldid release signing, or RootHide device launch was performed in this host.
 Internal STATIC-FIXTURE artifacts were used only to exercise packaging/verifier
 semantics and are intentionally excluded from the delivered source package.
 
-Pinned RC7 baseline
+Pinned RootHide baseline
 -------------------
 Full deb SHA-256:
 5392005d50c2a3e6189545e408aa4723bad401995ec508efcb48010c53d57f28
@@ -67,7 +67,7 @@ PASS  negative test: provenance TreeSHA tamper rejected even after outer checksu
 PASS  negative test: RuntimeDeviceTest=PASS semantic forgery rejected
 PASS  path traversal / unexpected-member fail-closed logic retained
 
-RC7 package integration gates retained
+RootHide package integration gates retained
 --------------------------------------
 PASS  exact full-deb baseline
 PASS  exact executable baseline
@@ -78,7 +78,7 @@ PASS  patch idempotence; second patch byte-identical
 PASS  final package exact allowlist delta
 PASS  deb ar metadata preservation
 PASS  tar entry type/mode/uid/gid/uname/gname/mtime preservation
-PASS  original RC7 postinst byte-identical contract
+PASS  original RootHide postinst byte-identical contract
 PASS  baseline-aware repacker remains independent of host uid/gid/fakeroot
 
 Weak load after patch
@@ -104,7 +104,7 @@ PASS  no delete/unregister/blacklist-write/icon-cache rebuild behavior added
 Tool / syntax gates
 -------------------
 PASS  Python integration scripts py_compile
-PASS  build_rc7_deb.sh shell syntax
+PASS  build_roothide_deb.sh shell syntax
 PASS  release_pipeline.sh shell syntax
 PASS  version consistency gate
 PASS  source invariant gate
@@ -127,5 +127,5 @@ NOT PERFORMED  real ldid signing of Analysis dylib
 NOT PERFORMED  real ldid re-signing of patched RootHide with preserved entitlements
 NOT PERFORMED  final production +analysis1.0.14 deb generation
 NOT PERFORMED  final production Deployment Schema 2 kit generation
-NOT PERFORMED  RC7 device launch / Runtime Self-Check
+NOT PERFORMED  RootHide device launch / Runtime Self-Check
 NOT PERFORMED  first-device scanner / false-positive validation

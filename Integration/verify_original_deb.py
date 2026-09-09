@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pin the complete RC7 rollback/build input package, not only its main executable."""
+"""Pin the complete RootHide rollback/build input package, not only its main executable."""
 import argparse, hashlib, io, shutil, subprocess, tarfile
 from pathlib import Path
 
@@ -23,13 +23,13 @@ def verify_archive_model(p: Path) -> None:
         with tarfile.open(fileobj=io.BytesIO(raw), mode="r:") as tf:
             members = tf.getmembers()
         if not members:
-            raise SystemExit(f"original RC7 {label} archive is empty")
+            raise SystemExit(f"original RootHide {label} archive is empty")
         bad = []
         for m in members:
             if (m.uid, m.gid, m.uname, m.gname) != (501, 20, "root", "wheel"):
                 bad.append((m.name, m.uid, m.gid, m.uname, m.gname))
         if bad:
-            raise SystemExit(f"original RC7 {label} tar ownership model drifted: {bad[:3]}")
+            raise SystemExit(f"original RootHide {label} tar ownership model drifted: {bad[:3]}")
     print("archive ownership model: PASS (numeric uid=501 gid=20; uname=root gname=wheel)")
 
 def main():
@@ -37,12 +37,12 @@ def main():
     if not p.is_file(): raise SystemExit(f'original deb missing: {p}')
     got=sha256(p)
     if got != EXPECTED_DEB_SHA256:
-        raise SystemExit(f'original RC7 deb SHA-256 mismatch: {got} != {EXPECTED_DEB_SHA256}')
+        raise SystemExit(f'original RootHide deb SHA-256 mismatch: {got} != {EXPECTED_DEB_SHA256}')
     if shutil.which('dpkg-deb') is None: raise SystemExit('dpkg-deb not found')
     for field,want in EXPECTED_FIELDS.items():
         value=subprocess.check_output(['dpkg-deb','-f',str(p),field], text=True).strip()
-        if value != want: raise SystemExit(f'original RC7 {field} mismatch: {value!r} != {want!r}')
+        if value != want: raise SystemExit(f'original RootHide {field} mismatch: {value!r} != {want!r}')
     verify_archive_model(p)
-    print(f'original RC7 deb exact match: {got}')
+    print(f'original RootHide deb exact match: {got}')
     print('metadata: Package=com.roothide.manager Version=1.3.9+bindtrust1 Architecture=iphoneos-arm64e')
 if __name__=='__main__': main()

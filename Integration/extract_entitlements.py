@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract RC7 entitlements from a signed Mach-O.
+"""Extract RootHide entitlements from a signed Mach-O.
 
 Unlike the 1.0.1 helper, this scans all embedded XML plists and selects the
 entitlement dictionary by semantic keys. That avoids accidentally treating an

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify that the final RC7 deb differs from the exact baseline only at approved Analysis integration paths."""
+"""Verify that the final RootHide deb differs from the exact baseline only at approved Analysis integration paths."""
 import argparse
 import io
 import os

@@ -20,7 +20,7 @@
     BOOL exists = NO;
     NSDictionary *defaults = [self configDictionaryWithExists:&exists];
 
-    // RC7's own UI treats a missing config as default false values. A file that
+    // RootHide's own UI treats a missing config as default false values. A file that
     // exists but cannot be decoded is different: report unknown instead of guessing.
     if (exists && ![defaults isKindOfClass:NSDictionary.class]) {
         for (RCAppRecord *app in apps) {
@@ -39,7 +39,7 @@
             app.blacklistStateKnown = NO;
             app.blacklistSupported = NO;
             app.blacklisted = NO;
-            app.blacklistEvidence = @"RC7 配置 blacklistDisabled=YES；Manager 本身不提供普通 blacklist 状态";
+            app.blacklistEvidence = @"RootHide 配置 blacklistDisabled=YES；Manager 本身不提供普通 blacklist 状态";
             continue;
         }
         id value = app.bundleIdentifier.length ? appconfig[app.bundleIdentifier] : nil;
@@ -49,9 +49,9 @@
         if (value) {
             app.blacklistEvidence = [NSString stringWithFormat:@"RootHideConfig.plist appconfig[%@] = %@", app.bundleIdentifier, [value boolValue] ? @"YES" : @"NO"];
         } else if (!exists) {
-            app.blacklistEvidence = @"RootHideConfig.plist 不存在；按 RC7 Manager 默认语义视为未加入 blacklist";
+            app.blacklistEvidence = @"RootHideConfig.plist 不存在；按 RootHide Manager 默认语义视为未加入 blacklist";
         } else {
-            app.blacklistEvidence = @"appconfig 中无此 Bundle ID；按 RC7 Manager 默认语义视为未加入 blacklist";
+            app.blacklistEvidence = @"appconfig 中无此 Bundle ID；按 RootHide Manager 默认语义视为未加入 blacklist";
         }
     }
 }

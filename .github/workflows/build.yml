@@ -1,4 +1,4 @@
-name: Build RC7 Inject Analysis
+name: Build RootHide Inject Analysis
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    name: Build arm64 + arm64e RC7 Analysis
+    name: Build arm64 + arm64e RootHide Analysis
     runs-on: macos-14
     timeout-minutes: 45
 
@@ -54,7 +54,7 @@ jobs:
           git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
           test -f "$THEOS/makefiles/common.mk"
 
-      - name: Verify pinned RC7 baseline
+      - name: Verify pinned RootHide baseline
         run: |
           set -euxo pipefail
           test -f "$BASELINE_DEB"
@@ -69,7 +69,7 @@ jobs:
           export PATH="$(brew --prefix make)/libexec/gnubin:$PATH"
           python3 Integration/check_toolchain.py
 
-      - name: Build and package RC7 Analysis
+      - name: Build and package RootHide Analysis
         id: release
         run: |
           set -o pipefail
@@ -93,11 +93,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Upload RC7 Analysis release
+      - name: Upload RootHide Analysis release
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: RCInjectAnalysis-RootHideBlacklist-1.0.16-${{ github.run_number }}
+          name: RCInjectAnalysis-RootHideBlacklist-1.0.17-${{ github.run_number }}
           path: |
             dist/*.deb
             dist/*RELEASE-RECEIPT.txt

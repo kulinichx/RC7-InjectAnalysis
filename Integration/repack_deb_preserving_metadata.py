@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Rebuild the pinned RC7 deb while preserving baseline tar/ar metadata exactly.
+"""Rebuild the pinned RootHide deb while preserving baseline tar/ar metadata exactly.
 
-This avoids dpkg-deb -b normalizing ownership to the build host.  The pinned RC7
+This avoids dpkg-deb -b normalizing ownership to the build host.  The pinned RootHide
 archive intentionally has unusual tar headers: numeric uid=501/gid=20 while
 uname/gname are root/wheel.  Existing entries retain their original TarInfo;
 only approved Analysis entries are added with the same app-bundle ownership
@@ -71,7 +71,7 @@ def parse_ar(path: Path) -> list[ArMember]:
 
 
 def ar_header(m: ArMember, size: int) -> bytes:
-    # All pinned RC7 member names fit the classic 16-byte ar name field.
+    # All pinned RootHide member names fit the classic 16-byte ar name field.
     name = (m.name + "/") if len(m.name) < 16 else m.name
     mode_field = f"{m.mode:o}".ljust(8)
     fields = (

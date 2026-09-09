@@ -1,6 +1,6 @@
-# RC7 integration layer — Analysis 1.0.14
+# RootHide integration layer — Analysis 1.0.17
 
-This directory builds and validates a separately linked universal `RCInjectAnalysis.dylib` into the exact RC7 `1.3.9+bindtrust1` Manager baseline without changing RC7 Core logic.
+This directory builds and validates a separately linked universal `RCInjectAnalysis.dylib` into the exact RootHide `1.3.9+bindtrust1` Manager baseline without changing RootHide Core logic.
 
 ## Preferred one-command path
 
@@ -12,13 +12,13 @@ On a real Theos + iOS SDK machine:
   /path/to/dist
 ```
 
-The pipeline performs toolchain preflight, central-version generation/checking, deterministic build-source snapshot/provenance creation, source/rule/baseline gates, Theos build, fail-closed dylib selection, candidate dylib verification, RC7 integration/signing, final package verification, exact package-delta verification, and release-receipt generation.
+The pipeline performs toolchain preflight, central-version generation/checking, deterministic build-source snapshot/provenance creation, source/rule/baseline gates, Theos build, fail-closed dylib selection, candidate dylib verification, RootHide integration/signing, final package verification, exact package-delta verification, and release-receipt generation.
 
 If the Theos tree contains multiple different valid `RCInjectAnalysis.dylib` files, the pipeline stops. Set `RC_ANALYSIS_DYLIB=/exact/path/RCInjectAnalysis.dylib` to explicitly resolve the ambiguity.
 
 ## Weak load integration
 
-The patcher adds exactly one command per RC7 slice:
+The patcher adds exactly one command per RootHide slice:
 
 ```text
 LC_LOAD_WEAK_DYLIB
@@ -29,15 +29,15 @@ The exact baseline has enough zero-filled header padding in both arm64 and arm64
 
 ## Version binding
 
-`../VERSION` is the single release version source. `generate_version_header.py` creates `Sources/RCVersion.generated.h`; `versioning.py` supplies the same value to Manifest/package/release Python tools; `build_rc7_deb.sh` reads the same VERSION for the package suffix. `verify_version_consistency.py` rejects drift.
+`../VERSION` is the single release version source. `generate_version_header.py` creates `Sources/RCVersion.generated.h`; `versioning.py` supplies the same value to Manifest/package/release Python tools; `build_roothide_deb.sh` reads the same VERSION for the package suffix. `verify_version_consistency.py` rejects drift.
 
 ## Pinned archive metadata model
 
-The exact RC7 deb uses an unusual tar-header combination: every baseline data/control entry has numeric `uid=501`, `gid=20`, while the stored names are `uname=root`, `gname=wheel`. The repacker preserves that tuple, type, mode, mtime, and link metadata for every existing entry. New Analysis Frameworks entries inherit the `RootHide.app` ownership/name/mtime model. This is intentionally independent of the Linux/macOS build user's uid/gid.
+The exact RootHide deb uses an unusual tar-header combination: every baseline data/control entry has numeric `uid=501`, `gid=20`, while the stored names are `uname=root`, `gname=wheel`. The repacker preserves that tuple, type, mode, mtime, and link metadata for every existing entry. New Analysis Frameworks entries inherit the `RootHide.app` ownership/name/mtime model. This is intentionally independent of the Linux/macOS build user's uid/gid.
 
 ## Manual integration order
 
-`build_rc7_deb.sh` performs source/version and dylib verification, exact baseline SHA validation, original entitlement extraction, weak-load patching, embedded dylib signing, signed-dylib Manifest creation/verification, host re-signing with the original entitlements, baseline-aware tar/ar repacking, final artifact reopening, entitlement equality check, and exact package-delta/archive-metadata verification.
+`build_roothide_deb.sh` performs source/version and dylib verification, exact baseline SHA validation, original entitlement extraction, weak-load patching, embedded dylib signing, signed-dylib Manifest creation/verification, host re-signing with the original entitlements, baseline-aware tar/ar repacking, final artifact reopening, entitlement equality check, and exact package-delta/archive-metadata verification.
 
 The input deb is never modified in place.
 
@@ -48,7 +48,7 @@ The input deb is never modified in place.
 - `verify_source_invariants.py` / `rule_matrix_selftest.py` — read-only and conservative-analysis gates.
 - `source_fingerprint.py` — canonical release-critical source-tree SHA-256.
 - `make_source_snapshot.py` / `verify_source_snapshot.py` — deterministic exact build-source archive and provenance gate.
-- `verify_rc7_baseline.py` — exact RC7 executable SHA/architecture/entitlement/header-padding gate.
+- `verify_roothide_baseline.py` — exact RootHide executable SHA/architecture/entitlement/header-padding gate.
 - `verify_dylib.py` — arm64+arm64e Mach-O dylib/install-name gate.
 - `find_built_dylib.py` — fail-closed Theos artifact selector.
 - `make_build_manifest.py` / `verify_build_manifest.py` — signed-dylib SHA/UUID + SourceTreeSHA256 + deterministic BuildID binding.

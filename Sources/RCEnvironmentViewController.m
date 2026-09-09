@@ -7,6 +7,8 @@
 @interface RCEnvironmentViewController ()
 @property (nonatomic, strong) RCAnalysisSnapshot *snapshot;
 @property (nonatomic) BOOL scanning;
+@property (nonatomic) BOOL rescanning;
+@property (nonatomic, strong) UIBarButtonItem *rescanButton;
 @end
 
 @implementation RCEnvironmentViewController
@@ -14,9 +16,9 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"环境检查";
-    UIBarButtonItem *rescan = [[UIBarButtonItem alloc] initWithTitle:@"重新扫描" style:UIBarButtonItemStylePlain target:self action:@selector(forceRefresh)];
+    self.rescanButton = [[UIBarButtonItem alloc] initWithTitle:@"重新扫描" style:UIBarButtonItemStylePlain target:self action:@selector(forceRefresh)];
     UIBarButtonItem *report = [[UIBarButtonItem alloc] initWithTitle:@"报告" style:UIBarButtonItemStylePlain target:self action:@selector(shareReport)];
-    self.navigationItem.rightBarButtonItems = @[rescan, report];
+    self.navigationItem.rightBarButtonItems = @[self.rescanButton, report];
     [self loadSnapshot];
 }
 - (void)shareReport {
@@ -29,24 +31,58 @@
 - (void)loadSnapshot {
     if (self.scanning) return;
     self.scanning = YES;
+    self.rescanButton.enabled = NO;
     __weak typeof(self) weakSelf = self;
     [[RCAnalysisManager sharedManager] loadSnapshotWithCompletion:^(RCAnalysisSnapshot *snapshot) {
         weakSelf.scanning = NO;
         weakSelf.snapshot = snapshot;
+        weakSelf.rescanButton.enabled = YES;
         [weakSelf.tableView reloadData];
     }];
 }
 - (void)forceRefresh {
     if (self.scanning) return;
     self.scanning = YES;
+    self.rescanning = YES;
+    self.rescanButton.title = @"扫描中…";
+    self.rescanButton.enabled = NO;
+    [self.tableView reloadData];
     __weak typeof(self) weakSelf = self;
     [[RCAnalysisManager sharedManager] refreshWithCompletion:^(RCAnalysisSnapshot *snapshot) {
         weakSelf.scanning = NO;
+        weakSelf.rescanning = NO;
         weakSelf.snapshot = snapshot;
+        weakSelf.rescanButton.title = @"重新扫描";
+        weakSelf.rescanButton.enabled = YES;
         [weakSelf.tableView reloadData];
     }];
 }
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return self.snapshot ? 7 : 1; }
+- (NSString *)systemTargetDescriptionForBundleIdentifier:(NSString *)bundleIdentifier {
+    NSString *lower = bundleIdentifier.lowercaseString;
+    if ([lower isEqualToString:@"com.apple.springboard"]) return @"SpringBoard 系统进程";
+    if ([lower isEqualToString:@"com.apple.backboardd"]) return @"backboardd 系统进程";
+    return nil;
+}
+- (NSArray<RCTweakRecord *> *)unresolvedFilterTweaks {
+    NSMutableArray<RCTweakRecord *> *out = [NSMutableArray array];
+    for (RCTweakRecord *tweak in self.snapshot.uninstalledTargetTweaks) {
+        BOOL hasUnresolved = tweak.unresolvedTargetExecutableIdentifiers.count > 0;
+        if (!hasUnresolved) {
+            for (NSString *bundleIdentifier in tweak.uninstalledTargetBundleIdentifiers) {
+                if (![self systemTargetDescriptionForBundleIdentifier:bundleIdentifier].length) {
+                    hasUnresolved = YES;
+                    break;
+                }
+            }
+        }
+        if (hasUnresolved) [out addObject:tweak];
+    }
+    return out;
+}
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+    if (!self.snapshot) return 1;
+    return self.unresolvedFilterTweaks.count ? 7 : 6;
+}
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (!self.snapshot) return 1;
     if (section == 0) return 9;
@@ -55,7 +91,7 @@
     if (section == 3) return MAX(1, self.snapshot.blacklistResidues.count);
     if (section == 4) return MAX(1, self.snapshot.orphanRegistrations.count);
     if (section == 5) return MAX(1, self.snapshot.suspiciousTweaks.count);
-    return MAX(1, self.snapshot.uninstalledTargetTweaks.count);
+    return self.unresolvedFilterTweaks.count;
 }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     if (!self.snapshot) return [NSString stringWithFormat:@"Analysis %@（只读）", RCAnalysisVersion()];
@@ -65,7 +101,7 @@
     if (section == 3) return @"无效 Blacklist 记录";
     if (section == 4) return @"孤立 App 注册";
     if (section == 5) return @"Tweak / Filter 可疑项";
-    return @"系统级 / 未解析 Filter 目标";
+    return @"未解析 Filter 目标";
 }
 - (UITableViewCell *)cell:(NSString *)text detail:(NSString *)detail {
     UITableViewCell *c = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
@@ -76,17 +112,17 @@
     c.selectionStyle = UITableViewCellSelectionStyleNone;
     return c;
 }
-- (NSString *)systemTargetDescriptionForBundleIdentifier:(NSString *)bundleIdentifier {
-    NSString *lower = bundleIdentifier.lowercaseString;
-    if ([lower isEqualToString:@"com.apple.springboard"]) return @"SpringBoard 系统进程";
-    if ([lower isEqualToString:@"com.apple.backboardd"]) return @"backboardd 系统进程";
-    return nil;
-}
 - (UITableViewCell *)environmentCellForRow:(NSInteger)row {
     RCEnvironmentProfile *e = self.snapshot.environmentProfile;
     if (row == 0) {
         NSString *text = [NSString stringWithFormat:@"Analysis %@ · %@", e.analysisVersion.length ? e.analysisVersion : RCAnalysisVersion(), e.analysisArchitecture.length ? e.analysisArchitecture : @"?"];
-        NSString *detail = [NSString stringWithFormat:@"UUID: %@\nImage: %@", e.analysisImageUUID.length ? e.analysisImageUUID : @"未知", e.analysisImagePath.length ? e.analysisImagePath : @"未知"];
+        NSDateFormatter *formatter = [NSDateFormatter new];
+        formatter.dateFormat = @"HH:mm:ss";
+        NSString *scanTime = self.snapshot.generatedAt ? [formatter stringFromDate:self.snapshot.generatedAt] : @"未知";
+        NSString *scanState = self.rescanning
+            ? [NSString stringWithFormat:@"正在重新扫描… 当前显示上一次结果（%@）", scanTime]
+            : [NSString stringWithFormat:@"扫描时间：%@", scanTime];
+        NSString *detail = [NSString stringWithFormat:@"%@\nUUID: %@\nImage: %@", scanState, e.analysisImageUUID.length ? e.analysisImageUUID : @"未知", e.analysisImagePath.length ? e.analysisImagePath : @"未知"];
         return [self cell:text detail:detail];
     }
     if (row == 1) {
@@ -161,26 +197,17 @@
     }
 
     if (indexPath.section == 6) {
-        if (!self.snapshot.tweakScanAvailable || !self.snapshot.launchServicesAvailable) return [self cell:@"Filter 目标分析不可用" detail:@"需要同时取得 Tweak Filter 与 LaunchServices App 列表；缺任一数据源时不作结论"];
-        if (!self.snapshot.uninstalledTargetTweaks.count) return [self cell:@"未发现系统级或未解析 Filter 目标" detail:@"没有在 LaunchServices App 列表命中，不等于 App 已卸载。"];
-        RCTweakRecord *t = self.snapshot.uninstalledTargetTweaks[indexPath.row];
-        NSMutableArray<NSString *> *systemTargets = [NSMutableArray array];
-        NSMutableArray<NSString *> *unresolvedTargets = [NSMutableArray array];
+        NSArray<RCTweakRecord *> *unresolvedTweaks = self.unresolvedFilterTweaks;
+        if (indexPath.row >= (NSInteger)unresolvedTweaks.count) return [self cell:@"未解析 Filter 目标不可用" detail:@"列表状态已变化；未执行任何修改操作。"];
+        RCTweakRecord *t = unresolvedTweaks[indexPath.row];
+        NSMutableArray<NSString *> *unresolvedBundles = [NSMutableArray array];
         for (NSString *bundleIdentifier in t.uninstalledTargetBundleIdentifiers) {
-            NSString *systemDescription = [self systemTargetDescriptionForBundleIdentifier:bundleIdentifier];
-            if (systemDescription.length) {
-                [systemTargets addObject:[NSString stringWithFormat:@"%@ → %@", bundleIdentifier, systemDescription]];
-            } else {
-                [unresolvedTargets addObject:bundleIdentifier];
-            }
+            if (![self systemTargetDescriptionForBundleIdentifier:bundleIdentifier].length) [unresolvedBundles addObject:bundleIdentifier];
         }
         NSMutableArray<NSString *> *parts = [NSMutableArray array];
-        if (t.systemTargetExecutableIdentifiers.count) [parts addObject:[NSString stringWithFormat:@"Filter.Executables 已确认系统进程目标：\n%@", [t.systemTargetExecutableIdentifiers componentsJoinedByString:@"\n"]]];
-        if (t.unresolvedTargetExecutableIdentifiers.count) [parts addObject:[NSString stringWithFormat:@"Filter.Executables 未解析目标：\n%@\n不据此判断为系统注入或已卸载 App。", [t.unresolvedTargetExecutableIdentifiers componentsJoinedByString:@"\n"]]];
-        if (t.installedTargetExecutableIdentifiers.count) [parts addObject:[NSString stringWithFormat:@"Filter.Executables 同时匹配已注册 App：\n%@", [t.installedTargetExecutableIdentifiers componentsJoinedByString:@"\n"]]];
-        if (systemTargets.count) [parts addObject:[NSString stringWithFormat:@"系统级目标：\n%@", [systemTargets componentsJoinedByString:@"\n"]]];
-        if (unresolvedTargets.count) [parts addObject:[NSString stringWithFormat:@"未匹配到当前 LaunchServices App：\n%@\n不据此判断为‘已卸载 App’或垃圾项。", [unresolvedTargets componentsJoinedByString:@"\n"]]];
-        if (t.installedTargetBundleIdentifiers.count) [parts addObject:[NSString stringWithFormat:@"同时匹配已注册 App：%lu 个", (unsigned long)t.installedTargetBundleIdentifiers.count]];
+        if (t.unresolvedTargetExecutableIdentifiers.count) [parts addObject:[NSString stringWithFormat:@"Filter.Executables 未解析目标：\n%@", [t.unresolvedTargetExecutableIdentifiers componentsJoinedByString:@"\n"]]];
+        if (unresolvedBundles.count) [parts addObject:[NSString stringWithFormat:@"Filter.Bundles 未解析目标：\n%@", [unresolvedBundles componentsJoinedByString:@"\n"]]];
+        [parts addObject:@"未解析不代表系统注入，也不代表 App 已卸载。此项仅在确有未解析目标时显示。"];
         return [self cell:[NSString stringWithFormat:@"ℹ %@", t.displayName] detail:[parts componentsJoinedByString:@"\n\n"]];
     }
 

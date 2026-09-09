@@ -8,6 +8,8 @@
 @interface RCAnalysisViewController ()
 @property (nonatomic, strong) RCAnalysisSnapshot *snapshot;
 @property (nonatomic) BOOL scanning;
+@property (nonatomic) BOOL rescanning;
+@property (nonatomic, strong) UIBarButtonItem *rescanButton;
 @end
 
 @implementation RCAnalysisViewController
@@ -15,9 +17,9 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"注入分析";
-    UIBarButtonItem *rescan = [[UIBarButtonItem alloc] initWithTitle:@"重新扫描" style:UIBarButtonItemStylePlain target:self action:@selector(forceRefresh)];
+    self.rescanButton = [[UIBarButtonItem alloc] initWithTitle:@"重新扫描" style:UIBarButtonItemStylePlain target:self action:@selector(forceRefresh)];
     UIBarButtonItem *report = [[UIBarButtonItem alloc] initWithTitle:@"报告" style:UIBarButtonItemStylePlain target:self action:@selector(shareReport)];
-    self.navigationItem.rightBarButtonItems = @[rescan, report];
+    self.navigationItem.rightBarButtonItems = @[self.rescanButton, report];
     self.refreshControl = [UIRefreshControl new];
     [self.refreshControl addTarget:self action:@selector(forceRefresh) forControlEvents:UIControlEventValueChanged];
     [self loadSnapshot];
@@ -34,10 +36,12 @@
 - (void)loadSnapshot {
     if (self.scanning) return;
     self.scanning = YES;
+    self.rescanButton.enabled = NO;
     __weak typeof(self) weakSelf = self;
     [[RCAnalysisManager sharedManager] loadSnapshotWithCompletion:^(RCAnalysisSnapshot *snapshot) {
         weakSelf.scanning = NO;
         weakSelf.snapshot = snapshot;
+        weakSelf.rescanButton.enabled = YES;
         [weakSelf.refreshControl endRefreshing];
         [weakSelf.tableView reloadData];
     }];
@@ -46,11 +50,18 @@
 - (void)forceRefresh {
     if (self.scanning) return;
     self.scanning = YES;
+    self.rescanning = YES;
+    self.rescanButton.title = @"扫描中…";
+    self.rescanButton.enabled = NO;
     [self.refreshControl beginRefreshing];
+    [self.tableView reloadData];
     __weak typeof(self) weakSelf = self;
     [[RCAnalysisManager sharedManager] refreshWithCompletion:^(RCAnalysisSnapshot *snapshot) {
         weakSelf.scanning = NO;
+        weakSelf.rescanning = NO;
         weakSelf.snapshot = snapshot;
+        weakSelf.rescanButton.title = @"重新扫描";
+        weakSelf.rescanButton.enabled = YES;
         [weakSelf.refreshControl endRefreshing];
         [weakSelf.tableView reloadData];
     }];
@@ -153,10 +164,17 @@
     if (indexPath.section == 0) {
         RCScanMetrics *m = self.snapshot.metrics;
         BOOL incomplete = m.embeddedAppsTruncated || m.embeddedAppsSkippedByGlobalBudget;
-        NSString *status = incomplete ? @"⚠ 本次分析不完整，查看报告了解原因" : @"扫描完成";
         NSDateFormatter *formatter = [NSDateFormatter new];
         formatter.dateFormat = @"HH:mm:ss";
         NSString *scanTime = self.snapshot.generatedAt ? [formatter stringFromDate:self.snapshot.generatedAt] : @"刚刚";
+        if (self.rescanning) {
+            NSString *detail = [NSString stringWithFormat:@"%lu 个 App · %lu 个插件\n当前显示上一次结果 · 上次扫描时间：%@",
+                                (unsigned long)self.snapshot.apps.count,
+                                (unsigned long)self.snapshot.tweaks.count,
+                                scanTime];
+            return [self emptyCell:@"正在重新扫描…" detail:detail];
+        }
+        NSString *status = incomplete ? @"⚠ 本次分析不完整，查看报告了解原因" : @"扫描完成";
         NSString *detail = [NSString stringWithFormat:@"%lu 个 App · %lu 个插件\n扫描时间：%@ · 当前进程内结果可复用",
                             (unsigned long)self.snapshot.apps.count,
                             (unsigned long)self.snapshot.tweaks.count,

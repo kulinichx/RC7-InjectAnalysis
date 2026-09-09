@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 if [ "$#" -ne 3 ]; then
-  echo "Usage: $0 <original-rc7.deb> <RCInjectAnalysis.dylib> <output.deb>" >&2
+  echo "Usage: $0 <original-roothide.deb> <RCInjectAnalysis.dylib> <output.deb>" >&2
   exit 2
 fi
 ORIG="$1"; DYLIB="$2"; OUT="$3"
@@ -13,7 +13,7 @@ PATCH="$ROOT/Integration/patch_load_command.py"
 EXTRACT="$ROOT/Integration/extract_entitlements.py"
 COMPARE_ENT="$ROOT/Integration/compare_entitlements.py"
 VERIFY_ORIGINAL_DEB="$ROOT/Integration/verify_original_deb.py"
-VERIFY_BASE="$ROOT/Integration/verify_rc7_baseline.py"
+VERIFY_BASE="$ROOT/Integration/verify_roothide_baseline.py"
 VERIFY_SOURCE="$ROOT/Integration/verify_source_invariants.py"
 VERIFY_VERSION="$ROOT/Integration/verify_version_consistency.py"
 VERIFY="$ROOT/Integration/verify_macho.py"
@@ -48,7 +48,7 @@ chmod 0755 "$APP/Frameworks/RCInjectAnalysis.dylib"
 python3 "$PATCH" "$BIN" "$TMP/RootHide.patched" --weak
 mv "$TMP/RootHide.patched" "$BIN"
 
-# Sign embedded code first, then preserve the original RC7 executable entitlements.
+# Sign embedded code first, then preserve the original RootHide executable entitlements.
 ldid -S "$APP/Frameworks/RCInjectAnalysis.dylib"
 python3 "$VERIFY_DYLIB" "$APP/Frameworks/RCInjectAnalysis.dylib"
 MANIFEST="$APP/Frameworks/RCInjectAnalysis.buildinfo.plist"
@@ -59,7 +59,7 @@ python3 "$VERIFY" "$BIN"
 python3 "$EXTRACT" "$BIN" "$TMP/signed-entitlements.plist"
 python3 "$COMPARE_ENT" "$TMP/original-entitlements.plist" "$TMP/signed-entitlements.plist"
 
-# Preserve RC7 metadata/postinst; only the prototype version suffix changes.
+# Preserve RootHide metadata/postinst; only the prototype version suffix changes.
 CTRL="$TMP/pkg/DEBIAN/control"
 python3 - "$CTRL" "$SUFFIX" <<'PY'
 from pathlib import Path
@@ -74,7 +74,7 @@ if not v.endswith(suffix):
 p.write_text(s)
 PY
 
-# Preserve the pinned RC7 archive's exact tar metadata instead of letting
+# Preserve the pinned RootHide archive's exact tar metadata instead of letting
 # dpkg-deb -b reinterpret ownership through the build host.  The baseline uses
 # numeric uid=501/gid=20 while also storing uname=root/gname=wheel.  Existing
 # entries retain their original TarInfo; the three new Analysis entries inherit

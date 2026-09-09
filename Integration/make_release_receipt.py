@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a compact immutable receipt for a statically verified RC7 Analysis release."""
+"""Create a compact immutable receipt for a statically verified RootHide Analysis release."""
 import argparse
 import hashlib
 import plistlib

@@ -38,7 +38,7 @@ def main():
         if m.get('AnalysisVersion')!=VERSION: raise SystemExit(f'deployment version mismatch: {m.get("AnalysisVersion")} != {VERSION}')
         if m.get('RuntimeDeviceTest')!='NOT_PERFORMED': raise SystemExit('deployment manifest must not claim device runtime success')
         pre=m.get('PreInstall') or {}
-        required_pre={'StaticReleaseGate':'PASS','RuntimeDeviceTest':'NOT_PERFORMED','RollbackBaselinePinned':True,'InstallArtifactPinned':True,'SourceSnapshotPinned':True,'PostInstallContract':'UNCHANGED_RC7_POSTINST'}
+        required_pre={'StaticReleaseGate':'PASS','RuntimeDeviceTest':'NOT_PERFORMED','RollbackBaselinePinned':True,'InstallArtifactPinned':True,'SourceSnapshotPinned':True,'PostInstallContract':'UNCHANGED_ROOTHIDE_POSTINST'}
         for k,v in required_pre.items():
             if pre.get(k)!=v: raise SystemExit(f'preinstall contract mismatch: {k}={pre.get(k)!r}')
         expected={
@@ -80,6 +80,6 @@ def main():
     print(f'BuildID={m["BuildIdentity"]["BuildID"]}')
     print(f'SourceTreeSHA256={m["BuildIdentity"]["SourceTreeSHA256"]}')
     print('contains exact rollback + statically verified install + exact build-source snapshot/provenance')
-    print('RuntimeDeviceTest remains NOT_PERFORMED until a real RC7 device report is collected.')
+    print('RuntimeDeviceTest remains NOT_PERFORMED until a real RootHide device report is collected.')
 
 if __name__=='__main__': main()

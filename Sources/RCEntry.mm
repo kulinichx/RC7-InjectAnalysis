@@ -48,7 +48,7 @@ static BOOL RCMenuAlreadyContainsEntry(NSArray *menu) {
 }
 
 static BOOL RCMenuSupportsURLSchema(NSArray *menu) {
-    // RC7 1.3.9 baseline contains native menu items with type="url" + url.
+    // RootHide 1.3.9 baseline contains native menu items with type="url" + url.
     // Refuse to inject on an unexpected Manager schema rather than guessing.
     for (id section in menu) {
         NSArray *items = [section isKindOfClass:NSDictionary.class] ? section[@"items"] : nil;
@@ -123,7 +123,7 @@ static void RCInstallHooks(void) {
 
     Method reload = class_getInstanceMethod(cls, sel_registerName("reloadMenu"));
     Method select = class_getInstanceMethod(cls, sel_registerName("tableView:didSelectRowAtIndexPath:"));
-    if (!reload || !select) { RCLog(@"hook install refused: expected RC7 methods missing"); return; }
+    if (!reload || !select) { RCLog(@"hook install refused: expected RootHide methods missing"); return; }
 
     gOriginalReloadMenu = method_setImplementation(reload, (IMP)RCReloadMenu);
     gOriginalDidSelect = method_setImplementation(select, (IMP)RCDidSelect);
@@ -132,7 +132,7 @@ static void RCInstallHooks(void) {
 }
 
 __attribute__((constructor)) static void RCInjectAnalysisInit(void) {
-    RCLog(@"dylib loaded; scheduling RC7 menu hook");
+    RCLog(@"dylib loaded; scheduling RootHide menu hook");
     dispatch_async(dispatch_get_main_queue(), ^{
         RCInstallHooks();
         if (!gInstalled) {

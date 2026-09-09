@@ -23,7 +23,7 @@ def main() -> None:
     if 'Integration/generate_version_header.py' not in mk:
         raise SystemExit("Makefile does not regenerate the version header before build")
 
-    builder = (ROOT / "Integration/build_rc7_deb.sh").read_text(encoding="utf-8")
+    builder = (ROOT / "Integration/build_roothide_deb.sh").read_text(encoding="utf-8")
     for token in ('< "$ROOT/VERSION"', 'SUFFIX="+analysis$VERSION"'):
         if token not in builder:
             raise SystemExit(f"builder not bound to VERSION: missing {token}")

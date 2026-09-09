@@ -77,10 +77,10 @@ def main() -> None:
         'SourceSnapshot':{'Path':f'provenance/{snapshot.name}','SHA256':sha256(snapshot)},
         'PreInstall':{
             'StaticReleaseGate':'PASS','RuntimeDeviceTest':'NOT_PERFORMED','RollbackBaselinePinned':True,
-            'InstallArtifactPinned':True,'SourceSnapshotPinned':True,'PostInstallContract':'UNCHANGED_RC7_POSTINST',
+            'InstallArtifactPinned':True,'SourceSnapshotPinned':True,'PostInstallContract':'UNCHANGED_ROOTHIDE_POSTINST',
         },
         'RuntimeDeviceTest':'NOT_PERFORMED',
-        'PostInstallContract':'unchanged RC7 postinst; expected RootHide uid=0 gid=0 with executable + setuid',
+        'PostInstallContract':'unchanged RootHide postinst; expected RootHide uid=0 gid=0 with executable + setuid',
     }
     for p in docs: manifest.setdefault('Documents',{})[p.name]=sha256(p)
     out.parent.mkdir(parents=True,exist_ok=True)

@@ -2,23 +2,23 @@
 
 This tree is prepared for the user's existing **Git Bash → GitHub → Actions** workflow. See `GITHUB-BUILD.md`.
 
-# RCInjectAnalysis 1.0.14 — RC7 build-handoff / release-pipeline build
+# RCInjectAnalysis 1.0.17 — RootHide build-handoff / release-pipeline build
 
 Target baseline: exact `com.roothide.manager` / RootHide Manager `1.3.9+bindtrust1` executable SHA-256 `c12b596acd1856677b8fb9753fcebdd88c7601318f10b6b7a8926e2568de687e`.
 
 ## Safety boundary
 
-Analysis 1.0.14 remains deliberately read-only. It does not change blacklist / `RootHideConfig.plist`, unregister LaunchServices records, delete/move tweak or App files, rebuild icon cache, respring, or modify RC7 Core behavior.
+Analysis 1.0.17 remains deliberately read-only. It does not change blacklist / `RootHideConfig.plist`, unregister LaunchServices records, delete/move tweak or App files, rebuild icon cache, respring, or modify RootHide Core behavior.
 
-## What 1.0.14 adds
+## Current release guarantees
 
 ### Build-source provenance and deterministic BuildID
 
-1.0.14 binds the packaged signed dylib to the exact release-critical source tree (`VERSION`, `Makefile`, `Sources/**`, `Integration/**`). `source_fingerprint.py` computes a canonical tree SHA-256 over relative path, mode, size, and file SHA-256. Manifest Schema 3 stores `SourceTreeSHA256`, `SourceFileCount`, and a deterministic `BuildID` derived from version + source-tree digest + signed dylib digest + pinned RC7 executable baseline. The runtime report surfaces the same BuildID and source-tree digest alongside the loaded LC_UUID.
+1.0.17 binds the packaged signed dylib to the exact release-critical source tree (`VERSION`, `Makefile`, `Sources/**`, `Integration/**`). `source_fingerprint.py` computes a canonical tree SHA-256 over relative path, mode, size, and file SHA-256. Manifest Schema 3 stores `SourceTreeSHA256`, `SourceFileCount`, and a deterministic `BuildID` derived from version + source-tree digest + signed dylib digest + pinned RootHide executable baseline. The runtime report surfaces the same BuildID and source-tree digest alongside the loaded LC_UUID.
 
 ### Exact build-source snapshot in the deployment kit
 
-The release pipeline creates a deterministic `RCInjectAnalysis-1.0.14-BUILD-SOURCE.zip` plus `RCInjectAnalysis-1.0.14-SOURCE-PROVENANCE.json`. The deployment kit binds both by SHA-256 and verifies that the snapshot reconstructs the same canonical source-tree digest recorded in the packaged build manifest and release receipt. This is an integrity/reproducibility chain, not a cryptographic publisher signature.
+The release pipeline creates a deterministic `RCInjectAnalysis-1.0.17-BUILD-SOURCE.zip` plus `RCInjectAnalysis-1.0.17-SOURCE-PROVENANCE.json`. The deployment kit binds both by SHA-256 and verifies that the snapshot reconstructs the same canonical source-tree digest recorded in the packaged build manifest and release receipt. This is an integrity/reproducibility chain, not a cryptographic publisher signature.
 
 ### Deployment Schema 2 / machine-readable pre-install contract
 
@@ -31,19 +31,19 @@ The release pipeline creates a deterministic `RCInjectAnalysis-1.0.14-BUILD-SOUR
 
 ### First-device install-state self-check
 
-The runtime self-check now reports the installed RootHide executable file state in addition to Mach-O/manifest identity. The unchanged RC7 `postinst` is expected to leave `/Applications/RootHide.app/RootHide` as uid `0`, gid `0`, executable + setuid; actual mode is reported. A mismatch is reported as `host-postinstall-state`; the dylib is also checked to be a regular executable file. This remains read-only (`stat(2)` only).
+The runtime self-check now reports the installed RootHide executable file state in addition to Mach-O/manifest identity. The unchanged RootHide `postinst` is expected to leave `/Applications/RootHide.app/RootHide` as uid `0`, gid `0`, executable + setuid; actual mode is reported. A mismatch is reported as `host-postinstall-state`; the dylib is also checked to be a regular executable file. This remains read-only (`stat(2)` only).
 
 ### Archive metadata preservation
 
-The final package gate now compares deb data/control archive metadata directly, not just extracted bytes. Existing RC7 entries must preserve numeric uid/gid/mode; the pinned RC7 tar headers use the unusual but real combination numeric uid `501`, gid `20`, while storing `uname=root` / `gname=wheel`. Existing entries preserve that tuple together with type/mode/mtime. The new `Frameworks` directory/dylib/buildinfo inherit the `RootHide.app` ownership/name/mtime model and use modes `0755` / `0755` / `0644`. Packaging is now performed by a baseline-aware tar/ar repacker, so build-host uid/gid, root privileges, and `fakeroot` no longer determine archive ownership.
+The final package gate now compares deb data/control archive metadata directly, not just extracted bytes. Existing RootHide entries must preserve numeric uid/gid/mode; the pinned RootHide tar headers use the unusual but real combination numeric uid `501`, gid `20`, while storing `uname=root` / `gname=wheel`. Existing entries preserve that tuple together with type/mode/mtime. The new `Frameworks` directory/dylib/buildinfo inherit the `RootHide.app` ownership/name/mtime model and use modes `0755` / `0755` / `0644`. Packaging is now performed by a baseline-aware tar/ar repacker, so build-host uid/gid, root privileges, and `fakeroot` no longer determine archive ownership.
 
 ### Postinstall contract gate
 
-`Integration/verify_postinstall_contract.py` pins the exact original RC7 `postinst` SHA-256 and verifies that the final Analysis package keeps it byte-for-byte unchanged. This complements the package-delta verifier and makes the expected `uicache` / `chown 0:0` / `chmod +s` installation behavior explicit.
+`Integration/verify_postinstall_contract.py` pins the exact original RootHide `postinst` SHA-256 and verifies that the final Analysis package keeps it byte-for-byte unchanged. This complements the package-delta verifier and makes the expected `uicache` / `chown 0:0` / `chmod +s` installation behavior explicit.
 
 ### Deployment kit with exact rollback baseline
 
-A successful release pipeline now creates `RCInjectAnalysis-1.0.14-DEPLOYMENT-KIT.zip`. The kit contains the final Analysis deb, the exact untouched RC7 rollback deb, release receipt, first-run documents, deployment manifest, and SHA256SUMS. `verify_deployment_kit.py` re-runs the static final-deb and postinstall gates against the package pair before the kit is accepted.
+A successful release pipeline now creates `RCInjectAnalysis-1.0.17-DEPLOYMENT-KIT.zip`. The kit contains the final Analysis deb, the exact untouched RootHide rollback deb, release receipt, first-run documents, deployment manifest, and SHA256SUMS. `verify_deployment_kit.py` re-runs the static final-deb and postinstall gates against the package pair before the kit is accepted.
 
 ### One version source
 
@@ -99,7 +99,7 @@ toolchain preflight
 → make clean + make
 → choose exactly one valid universal dylib
 → candidate dylib release gate
-→ RC7 weak-load/sign/build integration
+→ RootHide weak-load/sign/build integration
 → reopen final deb
 → final release gate + exact package-delta gate
 → release receipt with BuildID/source-tree binding
@@ -107,14 +107,14 @@ toolchain preflight
 → deployment-kit re-verification
 ```
 
-It does not declare device runtime success. A real RC7 launch/test is still mandatory.
+It does not declare device runtime success. A real RootHide launch/test is still mandatory.
 
 ### Release receipt
 
 A successful pipeline creates:
 
 ```text
-RCInjectAnalysis-1.0.14-RELEASE-RECEIPT.txt
+RCInjectAnalysis-1.0.17-RELEASE-RECEIPT.txt
 ```
 
 The receipt records original/built deb SHA-256, packaged dylib SHA-256, Manifest binding, `BuildID`, `SourceTreeSHA256`, `SourceFileCount`, schema/load mode/install-name, arm64/arm64e LC_UUID values, and explicitly states `RuntimeDeviceTest=NOT_PERFORMED`. The receipt generator re-runs the exact built-deb release gate before writing `StaticReleaseGate=PASS`.
@@ -127,12 +127,12 @@ The receipt records original/built deb SHA-256, packaged dylib SHA-256, Manifest
 
 The existing runtime identity chain remains intact. The in-app report records the loaded Analysis path, runtime architecture, in-memory `LC_UUID`, host `LC_LOAD_WEAK_DYLIB`, Menu Hook state, and `RCInjectAnalysis.buildinfo.plist` values. Manifest schema 3 stores the signed dylib SHA-256, per-slice arm64/arm64e UUIDs, exact source-tree digest/file count, and deterministic BuildID. A normal builder-produced device run should report `Runtime Self-Check: PASS` before scanner output is interpreted.
 
-## Analysis behavior retained
+## Current Analysis behavior
 
-1.0.14 does not broaden the detection surface. It retains:
+1.0.17 keeps the read-only safety boundary while using the current injection classification model:
 
-- searchable single-App deep analysis;
-- evidence Layer 0–4 wording;
+- three-panel Analysis home: `扫描摘要` / `系统注入` / `App 注入`;
+- App-centric `DEB（包管理器）` / `TrollFools` grouping, with scanner-centric technical evidence kept in reports;
 - full/per-App in-memory diagnostic reports and `Scan-ID`;
 - 50,000 entries/App, 1.5s/App, 12s/global TrollFools soft budgets;
 - runtime capability fail-unknown behavior;
@@ -155,8 +155,8 @@ If the one-command pipeline is not used, first generate/check the version bindin
 python3 Integration/generate_version_header.py
 python3 Integration/verify_version_consistency.py
 python3 Integration/verify_release.py '/path/to/original.deb'
-python3 Integration/make_source_snapshot.py /path/to/RCInjectAnalysis-1.0.14-BUILD-SOURCE.zip /path/to/RCInjectAnalysis-1.0.14-SOURCE-PROVENANCE.json
-python3 Integration/verify_source_snapshot.py /path/to/RCInjectAnalysis-1.0.14-BUILD-SOURCE.zip /path/to/RCInjectAnalysis-1.0.14-SOURCE-PROVENANCE.json
+python3 Integration/make_source_snapshot.py /path/to/RCInjectAnalysis-1.0.17-BUILD-SOURCE.zip /path/to/RCInjectAnalysis-1.0.17-SOURCE-PROVENANCE.json
+python3 Integration/verify_source_snapshot.py /path/to/RCInjectAnalysis-1.0.17-BUILD-SOURCE.zip /path/to/RCInjectAnalysis-1.0.17-SOURCE-PROVENANCE.json
 ```
 
 Then compile in the real Theos environment:
@@ -173,24 +173,24 @@ python3 Integration/verify_release.py '/path/to/original.deb' \
   --dylib /path/to/RCInjectAnalysis.dylib
 ```
 
-Build the RC7 package:
+Build the RootHide package:
 
 ```sh
-Integration/build_rc7_deb.sh \
+Integration/build_roothide_deb.sh \
   '/path/to/original.deb' \
   /path/to/RCInjectAnalysis.dylib \
-  /path/to/com.roothide.manager_1.3.9+bindtrust1+analysis1.0.14.deb
+  /path/to/com.roothide.manager_1.3.9+bindtrust1+analysis1.0.17.deb
 ```
 
 Finally reopen and verify the exact install artifact:
 
 ```sh
 python3 Integration/verify_release.py '/path/to/original.deb' \
-  --built-deb /path/to/com.roothide.manager_1.3.9+bindtrust1+analysis1.0.14.deb
+  --built-deb /path/to/com.roothide.manager_1.3.9+bindtrust1+analysis1.0.17.deb
 ```
 
 Expected final package delta is limited to the patched `RootHide` executable, `DEBIAN/control` Version field, and the two new Frameworks files `RCInjectAnalysis.dylib` and `RCInjectAnalysis.buildinfo.plist`. No baseline file may be removed or otherwise changed.
 
 ## Device validation
 
-Use `FIRST-RUN-TEST.md`. Return the app's full report and `FIELD-REPORT-TEMPLATE.md` observations before changing device state. 1.0.14 intentionally contains no cleanup/unregister action.
+Use `FIRST-RUN-TEST.md`. Return the app's full report and `FIELD-REPORT-TEMPLATE.md` observations before changing device state. 1.0.17 intentionally contains no cleanup/unregister action.

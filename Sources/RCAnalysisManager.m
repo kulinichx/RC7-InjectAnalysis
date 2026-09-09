@@ -34,6 +34,8 @@ typedef void (^RCAnalysisCompletion)(RCAnalysisSnapshot *snapshot);
 @property (nonatomic) dispatch_queue_t scanQueue;
 @property (nonatomic) BOOL scanInProgress;
 @property (nonatomic, strong) NSMutableArray<RCAnalysisCompletion> *pendingCompletions;
+- (void)requestSnapshotForceRefresh:(BOOL)forceRefresh
+                         completion:(void (^)(RCAnalysisSnapshot *snapshot))completion;
 @end
 
 @implementation RCAnalysisManager
@@ -53,17 +55,40 @@ typedef void (^RCAnalysisCompletion)(RCAnalysisSnapshot *snapshot);
     return self;
 }
 
+- (void)loadSnapshotWithCompletion:(void (^)(RCAnalysisSnapshot *))completion {
+    [self requestSnapshotForceRefresh:NO completion:completion];
+}
+
 - (void)refreshWithCompletion:(void (^)(RCAnalysisSnapshot *))completion {
+    [self requestSnapshotForceRefresh:YES completion:completion];
+}
+
+- (void)requestSnapshotForceRefresh:(BOOL)forceRefresh
+                         completion:(void (^)(RCAnalysisSnapshot *snapshot))completion {
     BOOL shouldStart = NO;
+    RCAnalysisSnapshot *cachedSnapshot = nil;
     @synchronized (self) {
-        if (completion) [self.pendingCompletions addObject:[completion copy]];
-        if (!self.scanInProgress) {
-            self.scanInProgress = YES;
-            shouldStart = YES;
+        if (!forceRefresh && self.snapshot && !self.scanInProgress) {
+            cachedSnapshot = self.snapshot;
+        } else {
+            if (completion) [self.pendingCompletions addObject:[completion copy]];
+            if (!self.scanInProgress) {
+                if (forceRefresh) self.snapshot = nil;
+                self.scanInProgress = YES;
+                shouldStart = YES;
+            }
         }
     }
+
+    if (cachedSnapshot) {
+        RCLog(@"reusing in-process analysis snapshot id=%@", cachedSnapshot.scanIdentifier ?: @"?");
+        if (completion) {
+            dispatch_async(dispatch_get_main_queue(), ^{ completion(cachedSnapshot); });
+        }
+        return;
+    }
     if (!shouldStart) {
-        RCLog(@"refresh coalesced into active scan");
+        RCLog(@"analysis request coalesced into active scan");
         return;
     }
 
@@ -196,7 +221,19 @@ typedef void (^RCAnalysisCompletion)(RCAnalysisSnapshot *snapshot);
                                                                        maxEntries:RCEmbeddedEntryLimitPerApp
                                                                          deadline:effectiveDeadline
                                                                     timeoutReason:timeoutReason];
-        app.embeddedInjections = embeddedResult.records;
+        NSMutableArray<RCEmbeddedInjectionRecord *> *deduplicatedEmbedded = [NSMutableArray array];
+        NSMutableSet<NSString *> *embeddedIdentities = [NSMutableSet set];
+        for (RCEmbeddedInjectionRecord *record in embeddedResult.records) {
+            NSString *identity = [NSString stringWithFormat:@"%@\x1f%@\x1f%@\x1f%@",
+                                  record.appBundleIdentifier ?: @"",
+                                  record.targetMachOPath ?: @"",
+                                  record.backupPath ?: @"",
+                                  record.loadPath ?: @""];
+            if ([embeddedIdentities containsObject:identity]) continue;
+            [embeddedIdentities addObject:identity];
+            [deduplicatedEmbedded addObject:record];
+        }
+        app.embeddedInjections = deduplicatedEmbedded;
         app.embeddedScanEntriesVisited = embeddedResult.entriesVisited;
         app.embeddedScanTruncated = embeddedResult.truncated;
         app.embeddedScanAttempted = embeddedResult.scanAttempted;
@@ -213,7 +250,7 @@ typedef void (^RCAnalysisCompletion)(RCAnalysisSnapshot *snapshot);
             slowestEmbeddedAppDuration = embeddedResult.duration;
             slowestEmbeddedAppBundleIdentifier = app.bundleIdentifier ?: @"";
         }
-        [allEmbedded addObjectsFromArray:embeddedResult.records];
+        [allEmbedded addObjectsFromArray:app.embeddedInjections];
     }
     NSTimeInterval embeddedDuration = -[phase timeIntervalSinceNow];
     RCTimelineAdd(timeline, totalStart, @"embedded", [NSString stringWithFormat:@"records=%lu entries=%lu apps=%lu incomplete=%lu timeLimited=%lu globalSkipped=%lu duration=%.3fs slowest=%@/%.3fs", (unsigned long)allEmbedded.count, (unsigned long)embeddedEntriesVisited, (unsigned long)embeddedAppsScanned, (unsigned long)embeddedAppsTruncated, (unsigned long)embeddedAppsTimeLimited, (unsigned long)embeddedAppsSkippedByGlobalBudget, embeddedDuration, slowestEmbeddedAppBundleIdentifier.length ? slowestEmbeddedAppBundleIdentifier : @"none", slowestEmbeddedAppDuration]);
@@ -281,7 +318,7 @@ typedef void (^RCAnalysisCompletion)(RCAnalysisSnapshot *snapshot);
     if (tweakScanAvailable && (!dpkgStatusAvailable || !dpkgInfoAvailable)) {
         RCDiagnosticItem *d = [RCDiagnosticItem new];
         d.name = @"DPKG result completeness"; d.passed = NO;
-        d.detail = @"DPKG status/info 不完整：仍可扫描 tweak Filter，但安装来源判定不完整";
+        d.detail = @"DPKG status/info 不完整：仍可扫描 tweak Filter，但 Package / Version / 文件归属信息可能不完整";
         [diagnostics addObject:d];
     }
 

@@ -50,22 +50,29 @@ for token in ('maxEntries', 'result.truncated = YES', 'result.entriesVisited', '
         errors.append(f'current-release bounded evidence-scan invariant missing: {token}')
 
 manager = (src / 'RCAnalysisManager.m').read_text(encoding='utf-8')
-for token in ('scanInProgress', 'pendingCompletions', 'refresh coalesced into active scan',
+for token in ('scanInProgress', 'pendingCompletions', 'loadSnapshotWithCompletion',
+              'requestSnapshotForceRefresh', 'analysis request coalesced into active scan',
               'RCEmbeddedEntryLimitPerApp', 'RCEmbeddedTimeLimitPerApp', 'RCEmbeddedTotalTimeLimit', 'embeddedAppsTruncated',
               'embeddedAppsTimeLimited', 'embeddedAppsSkippedByGlobalBudget',
+              'embeddedIdentities', 'targetMachOPath', 'backupPath', 'loadPath',
               'launchServicesAvailable', 'tweakScanAvailable', 'dpkgStatusAvailable', 'dpkgInfoAvailable'):
     if token not in manager:
         errors.append(f'current-release scan-coalescing/budget invariant missing: {token}')
 
 view = (src / 'RCAnalysisViewController.m').read_text(encoding='utf-8')
-for token in ('扫描摘要', 'TrollFools 证据为部分扫描', 'embeddedAppsTruncated',
-              'RootHide tweak 扫描不可用', '双来源判定条件不完整', 'global-skipped', 'Scan %@', 'shareReport', 'fullReadOnlyReportForSnapshot'):
+for token in ('扫描摘要', '本次分析不完整', 'embeddedAppsTruncated',
+              'RootHide tweak 扫描不可用', '双来源判定条件不完整', '当前进程内结果可复用',
+              '重新扫描', 'loadSnapshot', 'forceRefresh', 'embeddedApps',
+              '活动差分', 'Mach-O', 'Load', 'shareReport', 'fullReadOnlyReportForSnapshot'):
     if token not in view:
         errors.append(f'current-release partial-scan UI invariant missing: {token}')
 
 
 env = (src / 'RCEnvironmentViewController.m').read_text(encoding='utf-8')
-for token in ('孤立注册扫描不可用', 'DPKG 来源分析不完整', '未安装目标分析不可用', 'shareReport', 'fullReadOnlyReportForSnapshot'):
+for token in ('孤立注册扫描不可用', 'Filter 目标分析不可用', '系统级 / 未解析 Filter 目标',
+              '不等于 App 已卸载', 'com.apple.springboard', 'SpringBoard 系统进程',
+              'com.apple.backboardd', 'backboardd 系统进程',
+              'shareReport', 'fullReadOnlyReportForSnapshot'):
     if token not in env:
         errors.append(f'current-release fail-unknown environment UI invariant missing: {token}')
 
@@ -78,9 +85,15 @@ if 'writeToFile' in diag or 'writeToURL' in diag:
     errors.append('current-release diagnostic report must remain in-memory/read-only')
 
 detail = (src / 'RCAppDetailViewController.m').read_text(encoding='utf-8')
-for token in ('embeddedScanTruncated', 'embeddedScanAttempted', 'embeddedScanStopReason', 'Layer 0 · 数据源完整性', 'Layer 4 · 运行时进程证明', '未执行 TrollFools 深度扫描', 'TrollFools 证据扫描不完整'):
+for token in ('RootHide Bundles Filter 匹配', '注入 / Blacklist 状态', 'App 注册状态', '其它注入',
+              'TweakInject 数据源未通过 preflight', '不代表已确认冲突',
+              'LaunchServices：已注册', '实际 .app：存在',
+              '孤立注册：数据源不完整，未判定', '名单残留：数据源不完整，未判定'):
     if token not in detail:
-        errors.append(f'current-release App-detail partial-scan invariant missing: {token}')
+        errors.append(f'current-release App-centric detail invariant missing: {token}')
+for forbidden in ('安装来源：', 'Layer 0 · 数据源完整性', 'Layer 4 · 运行时进程证明'):
+    if forbidden in detail:
+        errors.append(f'ordinary App detail must hide scanner-centric field: {forbidden}')
 
 path = (src / 'RCPath.mm').read_text(encoding='utf-8')
 for token in ('RCResolveJBRoot', 'RCJBRootAvailable', 'RCJBRootImagePath', 'dladdr'):
@@ -108,7 +121,7 @@ for token in ('RootHide 运行环境', '扫描时间线', 'environmentProfile', 
         errors.append(f'current-release compatibility UI token missing: {token}')
 
 detail = (src / 'RCAppDetailViewController.m').read_text(encoding='utf-8')
-for token in ('匹配原因：Filter.Bundles 包含', 'Filter plist：', 'Filter.Bundles：'):
+for token in ('Package：', 'Version：', '匹配 Filter：'):
     if token not in detail:
         errors.append(f'current-release App match-explanation token missing: {token}')
 
@@ -132,9 +145,9 @@ for token in ('单 App 深度分析', '浏览全部已注册 App', 'RCAppBrowser
         errors.append(f'current-release deep-analysis entry invariant missing: {token}')
 
 detail = (src / 'RCAppDetailViewController.m').read_text(encoding='utf-8')
-for token in ('注入摘要', '组合判定', 'readOnlyReportForApp:self.record snapshot:self.snapshot',
-              'TweakInject 数据源未通过 preflight', 'DPKG capability 不完整',
-              'backup-diff', '不单独等于‘插件冲突’'):
+for token in ('readOnlyReportForApp:self.record snapshot:self.snapshot',
+              'TweakInject 数据源未通过 preflight', 'Package：', 'Version：',
+              '不代表已确认冲突', 'TrollFools / 巨魔注入'):
     if token not in detail:
         errors.append(f'current-release App deep-analysis invariant missing: {token}')
 
@@ -213,7 +226,9 @@ for token in ('RCInjectAnalysis.buildinfo.plist', 'make_build_manifest.py', 'ver
 # current release: runtime self-check must bind loaded image UUID to the signed build manifest
 # and prove the host executable contains the expected weak load command.
 build_text = (src / 'RCBuildInfo.m').read_text(encoding='utf-8')
-for token in ('RCAnalysisLoadedImagePathLooksExpected', 'RCAnalysisHostHasExpectedWeakLoad', 'RCAnalysisHostWeakLoadDetail', '_dyld_get_image_header(0)', 'LC_LOAD_WEAK_DYLIB'):
+for token in ('RCAnalysisLoadedImagePathLooksExpected', 'RCAnalysisHostHasExpectedWeakLoad', 'RCAnalysisHostWeakLoadDetail',
+              'RCDiskHostHasExpectedWeakLoad', 'NSBundle.mainBundle.executablePath', 'FAT_MAGIC',
+              'current-architecture slice', '_dyld_get_image_header(0)', 'LC_LOAD_WEAK_DYLIB'):
     if token not in build_text:
         errors.append(f'current-release runtime self-check build token missing: {token}')
 models = (src / 'RCModels.h').read_text(encoding='utf-8')
@@ -221,7 +236,7 @@ for token in ('analysisImagePathExpected', 'analysisHostWeakLoadPresent', 'analy
     if token not in models:
         errors.append(f'current-release runtime self-check model token missing: {token}')
 diag = (src / 'RCDiagnostics.m').read_text(encoding='utf-8')
-for token in ('DylibUUIDs', 'manifest-uuid', 'manifest-schema', 'manifest-build-id', 'manifest-source-provenance', 'BuildID=', 'SourceTreeSHA256=', 'host-weak-load', '[Runtime Release Self-Check]', 'RuntimeSelfCheck=', 'RC7 host weak load', 'Runtime release self-check'):
+for token in ('DylibUUIDs', 'manifest-uuid', 'manifest-schema', 'manifest-build-id', 'manifest-source-provenance', 'BuildID=', 'SourceTreeSHA256=', 'host-weak-load', '[Runtime Release Self-Check]', 'RuntimeSelfCheck=', 'RootHide host weak load', 'Runtime release self-check'):
     if token not in diag:
         errors.append(f'current-release runtime self-check diagnostic token missing: {token}')
 env = (src / 'RCEnvironmentViewController.m').read_text(encoding='utf-8')
@@ -310,7 +325,7 @@ for token in ('analysisHostExecutablePostInstallStateExpected', 'analysisHostExe
     if token not in models_text:
         errors.append(f'current-release install-state model token missing: {token}')
 diag_text = (src / 'RCDiagnostics.m').read_text(encoding='utf-8')
-for token in ('host-postinstall-state', 'dylib-file-state', 'HostExecutableState=', 'HostPostInstallState=', 'RC7 postinstall file state'):
+for token in ('host-postinstall-state', 'dylib-file-state', 'HostExecutableState=', 'HostPostInstallState=', 'RootHide postinstall file state'):
     if token not in diag_text:
         errors.append(f'current-release install-state diagnostic token missing: {token}')
 env_text = (src / 'RCEnvironmentViewController.m').read_text(encoding='utf-8')

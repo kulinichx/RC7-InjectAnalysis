@@ -126,8 +126,8 @@ static NSString *RCBoolText(BOOL value) { return value ? @"YES" : @"NO"; }
 
     [items addObject:RCCheck(@"Analysis loaded path", profile.analysisImagePathExpected,
                             profile.analysisImagePathExpected ? @"loaded from RootHide.app/Frameworks/RCInjectAnalysis.dylib" : [NSString stringWithFormat:@"unexpected/development load path: %@", profile.analysisImagePath.length ? profile.analysisImagePath : @"(unknown)"])];
-    [items addObject:RCCheck(@"RC7 host weak load", profile.analysisHostWeakLoadPresent, RCAnalysisHostWeakLoadDetail())];
-    [items addObject:RCCheck(@"RC7 postinstall file state", profile.analysisHostExecutablePostInstallStateExpected,
+    [items addObject:RCCheck(@"RootHide host weak load", profile.analysisHostWeakLoadPresent, RCAnalysisHostWeakLoadDetail())];
+    [items addObject:RCCheck(@"RootHide postinstall file state", profile.analysisHostExecutablePostInstallStateExpected,
                             [NSString stringWithFormat:@"path=%@ uid=%lu gid=%lu mode=%@ setuid=%@ %@", profile.analysisHostExecutablePath.length ? profile.analysisHostExecutablePath : @"(unknown)", (unsigned long)profile.analysisHostExecutableUID, (unsigned long)profile.analysisHostExecutableGID, profile.analysisHostExecutableMode.length ? profile.analysisHostExecutableMode : @"?", RCBoolText(profile.analysisHostExecutableSetUID), profile.analysisHostExecutableStateDetail.length ? profile.analysisHostExecutableStateDetail : @"matches original postinst root:root + setuid contract"] )];
     [items addObject:RCCheck(@"Analysis dylib file state", profile.analysisDylibFileStateExpected,
                             [NSString stringWithFormat:@"mode=%@ %@", profile.analysisDylibFileMode.length ? profile.analysisDylibFileMode : @"?", profile.analysisDylibFileStateDetail.length ? profile.analysisDylibFileStateDetail : @"regular executable dylib"] )];
@@ -140,7 +140,7 @@ static NSString *RCBoolText(BOOL value) { return value ? @"YES" : @"NO"; }
                                 ? [NSString stringWithFormat:@"schema=%ld buildID=%@ source=%@ files=%lu version=%@ versionMatch=%@ uuidMatch=%@ load=%@ installName=%@", (long)profile.analysisBuildManifestSchema, profile.analysisBuildID, profile.analysisBuildManifestSourceTreeSHA256, (unsigned long)profile.analysisBuildManifestSourceFileCount, profile.analysisBuildManifestVersion, RCBoolText(profile.analysisBuildManifestVersionMatches), RCBoolText(profile.analysisBuildManifestUUIDMatches), profile.analysisBuildManifestLoadMode, profile.analysisBuildManifestInstallName]
                                 : [NSString stringWithFormat:@"missing %@; loose/development load or packaging mismatch", RCAnalysisBuildManifestPath()])];
 
-    [items addObject:RCCheck(@"RC7 menu hooks", profile.analysisMenuHooksInstalled,
+    [items addObject:RCCheck(@"RootHide menu hooks", profile.analysisMenuHooksInstalled,
                             [NSString stringWithFormat:@"installed=%@ attempts=%lu", RCBoolText(profile.analysisMenuHooksInstalled), (unsigned long)profile.analysisMenuHookInstallAttempts])];
     [items addObject:RCCheck(@"Runtime release self-check", [profile.analysisRuntimeSelfCheckStatus isEqualToString:@"PASS"],
                             [NSString stringWithFormat:@"%@ — %@", profile.analysisRuntimeSelfCheckStatus, profile.analysisRuntimeSelfCheckSummary])];
@@ -152,7 +152,7 @@ static NSString *RCBoolText(BOOL value) { return value ? @"YES" : @"NO"; }
 
     Class settings = NSClassFromString(@"SettingViewController");
     [items addObject:RCCheck(@"SettingViewController", settings != Nil,
-                            settings ? @"RC7 menu host class is available" : @"RC7 menu host class not found")];
+                            settings ? @"RootHide menu host class is available" : @"RootHide menu host class not found")];
 
     Class workspace = NSClassFromString(@"LSApplicationWorkspace");
     [items addObject:RCCheck(@"LSApplicationWorkspace", workspace != Nil,
@@ -178,7 +178,7 @@ static NSString *RCBoolText(BOOL value) { return value ? @"YES" : @"NO"; }
     NSString *configPath = profile.rootHideConfigMappedPath;
     BOOL configExists = configPath.length && [fm fileExistsAtPath:configPath];
     [items addObject:RCCheck(@"RootHide config", YES,
-                            configExists ? [NSString stringWithFormat:@"config present: %@", configPath] : @"config absent: RC7 defaults apply")];
+                            configExists ? [NSString stringWithFormat:@"config present: %@", configPath] : @"config absent: RootHide defaults apply")];
 
     BOOL allPassed = YES;
     for (RCDiagnosticItem *item in items) {

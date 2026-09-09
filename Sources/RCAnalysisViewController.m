@@ -16,19 +16,32 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"注入分析";
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"报告" style:UIBarButtonItemStylePlain target:self action:@selector(shareReport)];
+    UIBarButtonItem *rescan = [[UIBarButtonItem alloc] initWithTitle:@"重新扫描" style:UIBarButtonItemStylePlain target:self action:@selector(forceRefresh)];
+    UIBarButtonItem *report = [[UIBarButtonItem alloc] initWithTitle:@"报告" style:UIBarButtonItemStylePlain target:self action:@selector(shareReport)];
+    self.navigationItem.rightBarButtonItems = @[rescan, report];
     self.refreshControl = [UIRefreshControl new];
-    [self.refreshControl addTarget:self action:@selector(refresh) forControlEvents:UIControlEventValueChanged];
-    [self refresh];
+    [self.refreshControl addTarget:self action:@selector(forceRefresh) forControlEvents:UIControlEventValueChanged];
+    [self loadSnapshot];
 }
 - (void)shareReport {
     if (!self.snapshot) return;
     NSString *report = [RCDiagnostics fullReadOnlyReportForSnapshot:self.snapshot];
     UIActivityViewController *vc = [[UIActivityViewController alloc] initWithActivityItems:@[report] applicationActivities:nil];
-    vc.popoverPresentationController.barButtonItem = self.navigationItem.rightBarButtonItem;
+    vc.popoverPresentationController.barButtonItem = self.navigationItem.rightBarButtonItems.lastObject;
     [self presentViewController:vc animated:YES completion:nil];
 }
-- (void)refresh {
+- (void)loadSnapshot {
+    if (self.scanning) return;
+    self.scanning = YES;
+    __weak typeof(self) weakSelf = self;
+    [[RCAnalysisManager sharedManager] loadSnapshotWithCompletion:^(RCAnalysisSnapshot *snapshot) {
+        weakSelf.scanning = NO;
+        weakSelf.snapshot = snapshot;
+        [weakSelf.refreshControl endRefreshing];
+        [weakSelf.tableView reloadData];
+    }];
+}
+- (void)forceRefresh {
     if (self.scanning) return;
     self.scanning = YES;
     [self.refreshControl beginRefreshing];
@@ -57,13 +70,23 @@
     }
     return a;
 }
+- (NSArray<RCAppRecord *> *)embeddedApps {
+    NSMutableArray *apps = [NSMutableArray array];
+    for (RCAppRecord *app in self.snapshot.apps) {
+        if (app.embeddedInjections.count) [apps addObject:app];
+    }
+    [apps sortUsingComparator:^NSComparisonResult(RCAppRecord *a, RCAppRecord *b) {
+        return [a.name localizedCaseInsensitiveCompare:b.name];
+    }];
+    return apps;
+}
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return self.snapshot ? 5 : 1; }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (!self.snapshot) return 1;
     if (section == 0) return 1;
     if (section == 1) return 1;
     if (section == 2) return MAX((NSUInteger)1, self.snapshot.multiMatchApps.count);
-    if (section == 3) return MAX((NSUInteger)1, self.snapshot.embeddedInjectionRecords.count);
+    if (section == 3) return MAX((NSUInteger)1, self.embeddedApps.count);
     return MAX((NSUInteger)1, self.mixedApps.count);
 }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
@@ -71,7 +94,7 @@
     if (section == 0) return @"扫描摘要";
     if (section == 1) return @"单 App 深度分析";
     if (section == 2) return @"多插件 Filter 匹配";
-    if (section == 3) return @"TrollFools / App 内嵌证据";
+    if (section == 3) return @"其它注入（按 App）";
     return @"RootHide 允许 + TrollFools 活动注入";
 }
 - (UITableViewCell *)emptyCell:(NSString *)text detail:(NSString *)detail {
@@ -86,19 +109,15 @@
     if (!self.snapshot) return [self emptyCell:@"正在只读扫描…" detail:@"不会修改 blacklist、不会 unregister、不会删除文件"];
     if (indexPath.section == 0) {
         RCScanMetrics *m = self.snapshot.metrics;
-        NSString *status = (m.embeddedAppsTruncated || m.embeddedAppsSkippedByGlobalBudget) ? @"⚠ TrollFools 证据为部分扫描" : @"✓ TrollFools 证据扫描完整";
-        RCEnvironmentProfile *e = self.snapshot.environmentProfile;
-        NSString *detail = [NSString stringWithFormat:@"Analysis %@ · %@ · UUID %@\nScan %@\nRootHide %@ · jbroot %@ · path mapping %@\n总耗时 %.2fs · App %lu · Tweak %lu\nTweak/DPKG %.2fs · LS App %.2fs · Blacklist %.2fs · TrollFools %.2fs\n遍历 %lu 项 / %lu 个 App bundle · incomplete %lu · time-limited %lu · global-skipped %lu\n预算：%lu entries/App · %.1fs/App · %.1fs global\n最慢 App：%@ %.3fs",
-                            e.analysisVersion.length ? e.analysisVersion : RCAnalysisVersion(), e.analysisArchitecture.length ? e.analysisArchitecture : @"?", e.analysisImageUUID.length ? e.analysisImageUUID : @"?",
-                            self.snapshot.scanIdentifier ?: @"?",
-                            e.rootHideDetected ? @"YES" : @"NO", e.jbrootAvailable ? @"YES" : @"NO", e.pathMappingActive ? @"YES" : @"NO",
-                            m.totalDuration, (unsigned long)self.snapshot.apps.count, (unsigned long)self.snapshot.tweaks.count,
-                            m.tweakAndPackageDuration, m.appDuration, m.blacklistDuration, m.embeddedDuration,
-                            (unsigned long)m.embeddedEntriesVisited, (unsigned long)m.embeddedAppsScanned,
-                            (unsigned long)m.embeddedAppsTruncated, (unsigned long)m.embeddedAppsTimeLimited,
-                            (unsigned long)m.embeddedAppsSkippedByGlobalBudget,
-                            (unsigned long)m.embeddedEntryLimitPerApp, m.embeddedTimeLimitPerApp, m.embeddedTotalTimeLimit,
-                            m.slowestEmbeddedAppBundleIdentifier.length ? m.slowestEmbeddedAppBundleIdentifier : @"(none)", m.slowestEmbeddedAppDuration];
+        BOOL incomplete = m.embeddedAppsTruncated || m.embeddedAppsSkippedByGlobalBudget;
+        NSString *status = incomplete ? @"⚠ 本次分析不完整，查看报告了解原因" : @"扫描完成";
+        NSDateFormatter *formatter = [NSDateFormatter new];
+        formatter.dateFormat = @"HH:mm:ss";
+        NSString *scanTime = self.snapshot.generatedAt ? [formatter stringFromDate:self.snapshot.generatedAt] : @"刚刚";
+        NSString *detail = [NSString stringWithFormat:@"%lu 个 App · %lu 个插件\n扫描时间：%@ · 当前进程内结果可复用",
+                            (unsigned long)self.snapshot.apps.count,
+                            (unsigned long)self.snapshot.tweaks.count,
+                            scanTime];
         return [self emptyCell:status detail:detail];
     }
     if (indexPath.section == 1) {
@@ -113,7 +132,7 @@
     if (indexPath.section == 2 && !self.snapshot.launchServicesAvailable) return [self emptyCell:@"App 扫描不可用" detail:@"LaunchServices 未通过 preflight，无法建立 App ↔ Tweak 匹配关系"];
     if (indexPath.section == 2 && !self.snapshot.multiMatchApps.count) return [self emptyCell:@"未发现多插件匹配" detail:@"扫描已执行；当前没有 App 同时匹配 2 个及以上 RootHide tweak Bundles filter"];
     if (indexPath.section == 3 && !self.snapshot.embeddedEvidenceAvailable) return [self emptyCell:@"TrollFools 证据扫描不可用" detail:@"LaunchServices/App bundle 数据源不可用；空结果不能解释为未发现"];
-    if (indexPath.section == 3 && !self.snapshot.embeddedInjectionRecords.count) {
+    if (indexPath.section == 3 && !self.embeddedApps.count) {
         RCScanMetrics *m = self.snapshot.metrics;
         if (m.embeddedAppsTruncated || m.embeddedAppsSkippedByGlobalBudget) return [self emptyCell:@"TrollFools 证据扫描不完整" detail:@"部分 App 因条目/时间预算未完整扫描；当前空记录不能解释为设备没有 TrollFools 高置信度证据"];
         return [self emptyCell:@"未发现 TrollFools 高置信度证据" detail:@"扫描已执行且预算内完成；没有备份证据时不会把普通 Framework 误判为巨魔注入"];
@@ -122,7 +141,7 @@
     if (indexPath.section == 4 && !self.mixedApps.count) {
         RCScanMetrics *m = self.snapshot.metrics;
         if (m.embeddedAppsTruncated || m.embeddedAppsSkippedByGlobalBudget) return [self emptyCell:@"双来源判定不完整" detail:@"RootHide 数据可用，但部分 App 的 TrollFools 证据因扫描预算不完整；不能把当前 0 条解释为未发现双来源"];
-        return [self emptyCell:@"未发现双来源活动证据" detail:@"要求：RootHide Filter 匹配、RC7 blacklist 配置允许、并确认 TrollFools Load Command 差分。仍不等同于运行时证明。"]; 
+        return [self emptyCell:@"未发现双来源活动证据" detail:@"要求：RootHide Filter 匹配、RootHide blacklist 配置允许、并确认 TrollFools Load Command 差分。仍不等同于运行时证明。"];
     }
 
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
@@ -134,20 +153,27 @@
         NSString *state = !app.blacklistStateKnown ? @"blacklist 状态未知" : (app.blacklisted ? @"已 blacklist" : @"blacklist 允许");
         cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@", app.bundleIdentifier, state];
     } else if (indexPath.section == 3) {
-        RCEmbeddedInjectionRecord *r = self.snapshot.embeddedInjectionRecords[indexPath.row];
-        RCAppRecord *app = [self appForBundleID:r.appBundleIdentifier];
-        cell.textLabel.text = app.name.length ? app.name : r.appBundleIdentifier;
-        cell.detailTextLabel.text = r.activeDifferenceConfirmed ? [NSString stringWithFormat:@"%@ · 活动 Load Command 差分已确认", RCEmbeddedSourceText(r.source)] : [NSString stringWithFormat:@"%@ · 有备份证据，活动状态未确认", RCEmbeddedSourceText(r.source)];
+        RCAppRecord *app = self.embeddedApps[indexPath.row];
+        NSMutableSet<NSString *> *machOPaths = [NSMutableSet set];
+        NSMutableSet<NSString *> *loadPaths = [NSMutableSet set];
+        NSUInteger active = 0;
+        for (RCEmbeddedInjectionRecord *r in app.embeddedInjections) {
+            if (r.targetMachOPath.length) [machOPaths addObject:r.targetMachOPath];
+            if (r.loadPath.length) [loadPaths addObject:r.loadPath];
+            if (r.activeDifferenceConfirmed) active++;
+        }
+        cell.textLabel.text = app.name.length ? app.name : app.bundleIdentifier;
+        cell.detailTextLabel.text = [NSString stringWithFormat:@"证据 %lu 条 · 活动差分 %lu · Mach-O %lu · Load %lu",
+                                         (unsigned long)app.embeddedInjections.count,
+                                         (unsigned long)active,
+                                         (unsigned long)machOPaths.count,
+                                         (unsigned long)loadPaths.count];
     } else {
         RCAppRecord *app = self.mixedApps[indexPath.row];
         cell.textLabel.text = app.name;
         cell.detailTextLabel.text = [NSString stringWithFormat:@"RootHide Filter %lu 个（blacklist 允许） + TrollFools 活动差分 %lu 个", (unsigned long)app.matchedTweaks.count, (unsigned long)[self activeEmbeddedCountForApp:app]];
     }
     return cell;
-}
-- (RCAppRecord *)appForBundleID:(NSString *)bundleID {
-    for (RCAppRecord *app in self.snapshot.apps) if ([app.bundleIdentifier isEqualToString:bundleID]) return app;
-    return nil;
 }
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
@@ -158,7 +184,7 @@
     }
     RCAppRecord *app = nil;
     if (indexPath.section == 2 && self.snapshot.multiMatchApps.count) app = self.snapshot.multiMatchApps[indexPath.row];
-    else if (indexPath.section == 3 && self.snapshot.embeddedInjectionRecords.count) app = [self appForBundleID:self.snapshot.embeddedInjectionRecords[indexPath.row].appBundleIdentifier];
+    else if (indexPath.section == 3 && self.embeddedApps.count) app = self.embeddedApps[indexPath.row];
     else if (indexPath.section == 4 && self.mixedApps.count) app = self.mixedApps[indexPath.row];
     if (app) [self.navigationController pushViewController:[[RCAppDetailViewController alloc] initWithAppRecord:app snapshot:self.snapshot] animated:YES];
 }

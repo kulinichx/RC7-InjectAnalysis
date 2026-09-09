@@ -14,17 +14,29 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"环境检查";
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"报告" style:UIBarButtonItemStylePlain target:self action:@selector(shareReport)];
-    [self refresh];
+    UIBarButtonItem *rescan = [[UIBarButtonItem alloc] initWithTitle:@"重新扫描" style:UIBarButtonItemStylePlain target:self action:@selector(forceRefresh)];
+    UIBarButtonItem *report = [[UIBarButtonItem alloc] initWithTitle:@"报告" style:UIBarButtonItemStylePlain target:self action:@selector(shareReport)];
+    self.navigationItem.rightBarButtonItems = @[rescan, report];
+    [self loadSnapshot];
 }
 - (void)shareReport {
     if (!self.snapshot) return;
     NSString *report = [RCDiagnostics fullReadOnlyReportForSnapshot:self.snapshot];
     UIActivityViewController *vc = [[UIActivityViewController alloc] initWithActivityItems:@[report] applicationActivities:nil];
-    vc.popoverPresentationController.barButtonItem = self.navigationItem.rightBarButtonItem;
+    vc.popoverPresentationController.barButtonItem = self.navigationItem.rightBarButtonItems.lastObject;
     [self presentViewController:vc animated:YES completion:nil];
 }
-- (void)refresh {
+- (void)loadSnapshot {
+    if (self.scanning) return;
+    self.scanning = YES;
+    __weak typeof(self) weakSelf = self;
+    [[RCAnalysisManager sharedManager] loadSnapshotWithCompletion:^(RCAnalysisSnapshot *snapshot) {
+        weakSelf.scanning = NO;
+        weakSelf.snapshot = snapshot;
+        [weakSelf.tableView reloadData];
+    }];
+}
+- (void)forceRefresh {
     if (self.scanning) return;
     self.scanning = YES;
     __weak typeof(self) weakSelf = self;
@@ -34,7 +46,7 @@
         [weakSelf.tableView reloadData];
     }];
 }
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return self.snapshot ? 8 : 1; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return self.snapshot ? 7 : 1; }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (!self.snapshot) return 1;
     if (section == 0) return 9;
@@ -43,10 +55,7 @@
     if (section == 3) return MAX(1, self.snapshot.blacklistResidues.count);
     if (section == 4) return MAX(1, self.snapshot.orphanRegistrations.count);
     if (section == 5) return MAX(1, self.snapshot.suspiciousTweaks.count);
-    if (section == 6) return MAX(1, self.snapshot.uninstalledTargetTweaks.count);
-    NSUInteger noOwner = 0;
-    for (RCTweakRecord *t in self.snapshot.tweaks) if (t.installSource == RCTweakInstallSourceUnknown) noOwner++;
-    return MAX(1, noOwner);
+    return MAX(1, self.snapshot.uninstalledTargetTweaks.count);
 }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     if (!self.snapshot) return [NSString stringWithFormat:@"Analysis %@（只读）", RCAnalysisVersion()];
@@ -56,8 +65,7 @@
     if (section == 3) return @"无效 Blacklist 记录";
     if (section == 4) return @"孤立 App 注册";
     if (section == 5) return @"Tweak / Filter 可疑项";
-    if (section == 6) return @"插件支持当前未安装的 App";
-    return @"安装来源未识别";
+    return @"系统级 / 未解析 Filter 目标";
 }
 - (UITableViewCell *)cell:(NSString *)text detail:(NSString *)detail {
     UITableViewCell *c = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
@@ -68,12 +76,11 @@
     c.selectionStyle = UITableViewCellSelectionStyleNone;
     return c;
 }
-- (NSArray<RCTweakRecord *> *)unknownOwnerTweaks {
-    NSPredicate *p = [NSPredicate predicateWithBlock:^BOOL(RCTweakRecord *t, NSDictionary *b) {
-        (void)b;
-        return t.installSource == RCTweakInstallSourceUnknown;
-    }];
-    return [self.snapshot.tweaks filteredArrayUsingPredicate:p];
+- (NSString *)systemTargetDescriptionForBundleIdentifier:(NSString *)bundleIdentifier {
+    NSString *lower = bundleIdentifier.lowercaseString;
+    if ([lower isEqualToString:@"com.apple.springboard"]) return @"SpringBoard 系统进程";
+    if ([lower isEqualToString:@"com.apple.backboardd"]) return @"backboardd 系统进程";
+    return nil;
 }
 - (UITableViewCell *)environmentCellForRow:(NSInteger)row {
     RCEnvironmentProfile *e = self.snapshot.environmentProfile;
@@ -94,7 +101,7 @@
     }
     if (row == 3) {
         NSString *text = [NSString stringWithFormat:@"安装后文件状态：Host %@ · dylib %@", e.analysisHostExecutablePostInstallStateExpected ? @"PASS" : @"WARN", e.analysisDylibFileStateExpected ? @"PASS" : @"WARN"];
-        NSString *detail = [NSString stringWithFormat:@"Host uid=%lu gid=%lu mode=%@ setuid=%@\n%@\ndylib mode=%@ · %@", (unsigned long)e.analysisHostExecutableUID, (unsigned long)e.analysisHostExecutableGID, e.analysisHostExecutableMode.length ? e.analysisHostExecutableMode : @"?", e.analysisHostExecutableSetUID ? @"YES" : @"NO", e.analysisHostExecutableStateDetail.length ? e.analysisHostExecutableStateDetail : @"符合原 RC7 postinst: root:root + executable + setuid", e.analysisDylibFileMode.length ? e.analysisDylibFileMode : @"?", e.analysisDylibFileStateDetail.length ? e.analysisDylibFileStateDetail : @"regular executable dylib"];
+        NSString *detail = [NSString stringWithFormat:@"Host uid=%lu gid=%lu mode=%@ setuid=%@\n%@\ndylib mode=%@ · %@", (unsigned long)e.analysisHostExecutableUID, (unsigned long)e.analysisHostExecutableGID, e.analysisHostExecutableMode.length ? e.analysisHostExecutableMode : @"?", e.analysisHostExecutableSetUID ? @"YES" : @"NO", e.analysisHostExecutableStateDetail.length ? e.analysisHostExecutableStateDetail : @"符合原 RootHide postinst: root:root + executable + setuid", e.analysisDylibFileMode.length ? e.analysisDylibFileMode : @"?", e.analysisDylibFileStateDetail.length ? e.analysisDylibFileStateDetail : @"regular executable dylib"];
         return [self cell:text detail:detail];
     }
     if (row == 4) {
@@ -154,22 +161,26 @@
     }
 
     if (indexPath.section == 6) {
-        if (!self.snapshot.tweakScanAvailable || !self.snapshot.launchServicesAvailable) return [self cell:@"未安装目标分析不可用" detail:@"需要同时取得 Tweak Filter 与 LaunchServices App 列表；缺任一数据源时不作结论"];
-        if (!self.snapshot.uninstalledTargetTweaks.count) return [self cell:@"未发现指向当前未安装 App 的 Bundles Filter" detail:@"扫描已执行；此项仅为信息，不属于垃圾或异常"];
+        if (!self.snapshot.tweakScanAvailable || !self.snapshot.launchServicesAvailable) return [self cell:@"Filter 目标分析不可用" detail:@"需要同时取得 Tweak Filter 与 LaunchServices App 列表；缺任一数据源时不作结论"];
+        if (!self.snapshot.uninstalledTargetTweaks.count) return [self cell:@"未发现系统级或未解析 Filter 目标" detail:@"没有在 LaunchServices App 列表命中，不等于 App 已卸载。"];
         RCTweakRecord *t = self.snapshot.uninstalledTargetTweaks[indexPath.row];
-        NSString *targets = [t.uninstalledTargetBundleIdentifiers componentsJoinedByString:@"\n"];
-        NSString *installed = t.installedTargetBundleIdentifiers.count
-            ? [NSString stringWithFormat:@"同时匹配已安装 App：%lu 个", (unsigned long)t.installedTargetBundleIdentifiers.count]
-            : @"当前没有已安装 App 命中这些 Bundles Filter";
-        return [self cell:[NSString stringWithFormat:@"ℹ %@", t.displayName]
-                    detail:[NSString stringWithFormat:@"%@\n未安装目标：\n%@", installed, targets]];
+        NSMutableArray<NSString *> *systemTargets = [NSMutableArray array];
+        NSMutableArray<NSString *> *unresolvedTargets = [NSMutableArray array];
+        for (NSString *bundleIdentifier in t.uninstalledTargetBundleIdentifiers) {
+            NSString *systemDescription = [self systemTargetDescriptionForBundleIdentifier:bundleIdentifier];
+            if (systemDescription.length) {
+                [systemTargets addObject:[NSString stringWithFormat:@"%@ → %@", bundleIdentifier, systemDescription]];
+            } else {
+                [unresolvedTargets addObject:bundleIdentifier];
+            }
+        }
+        NSMutableArray<NSString *> *parts = [NSMutableArray array];
+        if (systemTargets.count) [parts addObject:[NSString stringWithFormat:@"系统级目标：\n%@", [systemTargets componentsJoinedByString:@"\n"]]];
+        if (unresolvedTargets.count) [parts addObject:[NSString stringWithFormat:@"未匹配到当前 LaunchServices App：\n%@\n不据此判断为‘已卸载 App’或垃圾项。", [unresolvedTargets componentsJoinedByString:@"\n"]]];
+        if (t.installedTargetBundleIdentifiers.count) [parts addObject:[NSString stringWithFormat:@"同时匹配已注册 App：%lu 个", (unsigned long)t.installedTargetBundleIdentifiers.count]];
+        return [self cell:[NSString stringWithFormat:@"ℹ %@", t.displayName] detail:[parts componentsJoinedByString:@"\n\n"]];
     }
 
-    if (!self.snapshot.tweakScanAvailable) return [self cell:@"安装来源分析不可用" detail:@"TweakInject 数据源未通过 preflight"];
-    if (!self.snapshot.dpkgStatusAvailable || !self.snapshot.dpkgInfoAvailable) return [self cell:@"DPKG 来源分析不完整" detail:@"/Library/dpkg/status 或 /Library/dpkg/info 未通过 preflight；不能把未知归属解释为手工安装"];
-    NSArray *unknown = self.unknownOwnerTweaks;
-    if (!unknown.count) return [self cell:@"所有扫描到的 tweak 均可映射到 DPKG" detail:@"这里不等于能确定前端一定是 Sileo"];
-    RCTweakRecord *t = unknown[indexPath.row];
-    return [self cell:t.displayName detail:@"未找到 /Library/dpkg/info/*.list 对该 plist/dylib 的唯一归属；可能是手工安装或非标准软件包结构"];
+    return [self cell:@"环境检查项不可用" detail:@"未知 section；未执行任何修改操作。"];
 }
 @end
